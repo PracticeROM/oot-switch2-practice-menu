@@ -73,7 +73,16 @@ static uint32_t frames_run;
 bool frame_advance = false;
 bool frame_advance_in_pause = false;
 bool pause_display = true;
+bool hide_in_game_menus = true;
 int frame_advance_button; /* 0 L, 1 R */
+
+/* settings > hide in game menus: the game's own menus (Plus, Minus) are open, or opening (from the frame
+ * they start to fade in). gfx_frame keeps the HUD shown while sloperinaGZ's menu is open (it can be moved
+ * then). */
+static bool hud_hidden(void)
+{
+  return hide_in_game_menus && (gd_game_pausing() || gd_game_paused(0, 0));
+}
 
 /* Held (not as a shortcut) for FA_HOLD_MS, the button advances a frame every FA_REPEAT_MS
  * until it's let go. The wait leaves room for a tap that's a little long. */
@@ -284,6 +293,7 @@ static void fa_hold_game(void)
       menu_draw();
     }
     watches_frame(menu_current != 0);
+    gfx_hud_hidden = hud_hidden();
     gfx_frame();
     settings_frame(menu_current != 0);
     settings_log_frame();
@@ -369,6 +379,7 @@ static void frame(void)
   lock_frame();
   warp_frame();
   age_frame();
+  gfx_hud_hidden = hud_hidden();
   gfx_frame();
 
   cheats_frame();

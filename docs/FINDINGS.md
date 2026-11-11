@@ -725,7 +725,9 @@ sloperinaGZ yet. Same build as everything else here.
 - **The `Sequence_*Pause*` values only keep count.** Opening the map (Minus) or the pause screen (Plus) sets
   `PreGamePauseRequestCount` and `IsPreGamePause` to 1, about 60 ms later `GamePauseRequestCount` and `IsPause` to 1
   with the pre request back to 0; closing puts both back to 0 with a one-frame `PostGamePauseRequestCount` and
-  `IsPostGamePause`. A dialogue changes none of them. They belong to the sequence graphs `ChangeGamePause.module`,
+  `IsPostGamePause`. A dialogue changes none of them. The menu starts to fade in with the pre request, so
+  **settings > hide in game menus** hides the HUD from `IsPreGamePause` / `PreGamePauseRequestCount` on
+  (`gd_game_pausing`); waiting for `IsPause` left it over the menu for a few frames. They belong to the sequence graphs `ChangeGamePause.module`,
   `ChangePreGamePause.module` and `ChangePostGamePause.module`: on input `IsPause` they add or take 1 from the count,
   at 1 run `SeqOneShotRequestPause` with `PauseType` `GamePause`, back at 0 `SeqOneShotReleasePause`, and below 0
   raise an app error ("[Seq]GamePause underflow, please report"). Callers: `GamePauseOn`/`Off`,

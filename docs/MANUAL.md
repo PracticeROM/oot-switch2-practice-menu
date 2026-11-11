@@ -262,7 +262,9 @@ The game's own pause state, for development: values you can watch, change and lo
 ### 2.10 Settings
 
 **menu settings**: **language** ([6](#6-languages)), **size** (auto, small 2x, medium 2.5x, large 3x: the menu, watches
-and log) and **background opacity** (0 to 100%, 60% at first; below 100% the game shows through, slightly behind).
+and log), **background opacity** (0 to 100%, 60% at first; below 100% the game shows through, slightly behind) and
+**hide in game menus** (on at first): no watches, input display or log while the game's pause screen (Plus) or map
+(Minus) is open, so they don't cover it. They show again when it closes, and while this menu is open (to move them).
 
 **other settings**: the **input display**, **levitate** and **frame advance** menus below.
 
@@ -367,8 +369,8 @@ game's pause screen closed):
 
 Settings are saved on the SD card in `sloperinaGZ/settings.ini` (on an emulator, its virtual SD card) a couple of
 seconds after you close the menu. It's plain `key=value` text: cheats, watches (which, in what order, their types,
-names and whether shown), the watches box, menu size, background, language, input display, levitate and frame
-advance. Delete it to go back to the defaults. Your game saves are never touched.
+names and whether shown), the watches box, menu size, background, hiding in game menus, language, input display,
+levitate and frame advance. Delete it to go back to the defaults. Your game saves are never touched.
 
 The game's pictures sloperinaGZ uses (the controllers in the input display, the menus' parts, the item icons)
 are kept in `sloperinaGZ/cache/` once they're made from your copy of the game, so later starts don't have to make

@@ -2368,6 +2368,16 @@ static void set_fa_in_pause(menu_item_t *it, bool on)
   frame_advance_in_pause = on;
 }
 
+static bool get_hide_in_game_menus(menu_item_t *it)
+{
+  return hide_in_game_menus;
+}
+
+static void set_hide_in_game_menus(menu_item_t *it, bool on)
+{
+  hide_in_game_menus = on;
+}
+
 static bool get_pause_display(menu_item_t *it)
 {
   return pause_display;
@@ -2480,7 +2490,7 @@ static void build_levitate(void)
 
 static void build_settings(void)
 {
-  menu_init(&m_settings, "settings", 11);
+  menu_init(&m_settings, "settings", 12);
   menu_add_heading(&m_settings, "menu settings");
   menu_item_t *language = menu_add_option(&m_settings, "language", 1, lang_names(), get_lang, set_lang, 0);
   if (language)
@@ -2495,6 +2505,10 @@ static void build_settings(void)
   menu_item_t *style = menu_add_option(&m_settings, "style", GFX_STYLES, style_names, get_style, set_style, 0);
   if (style)
     style->hint = "the game's type, buttons and backdrop, or gz's pixel font";
+  menu_item_t *hide = menu_add_check(&m_settings, "hide in game menus", get_hide_in_game_menus,
+                                     set_hide_in_game_menus, 0);
+  if (hide)
+    hide->hint = "no watches, input display or log over the game's pause screen and map";
   menu_end_group(&m_settings);
   menu_add_heading(&m_settings, "other settings");
   menu_add_submenu(&m_settings, "input display", &m_input_display);

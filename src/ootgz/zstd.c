@@ -3,8 +3,8 @@
  *
  * The decoder handles every error by calling ERROR(), which upstream exits on. Here it jumps back to
  * the call that started the work (jump.h), and every block the decoder allocated during that call is
- * freed. The calls run on one thread (the game's, at start-up), so the jump buffer and the allocation
- * list are plain statics. */
+ * freed. The calls run on one thread (the game's), so the jump buffer and the allocation list are plain
+ * statics. A stream's decoder allocates from memory the stream took at its start (its arena, below). */
 #include "zstd.h"
 
 #include <stdbool.h>
@@ -23,22 +23,81 @@ void *memmove(void *dst, const void *src, size_t n);
 #define ALLOC_ALIGN 16
 #define MAX_LIVE 256 /* blocks the decoder holds at once: a few per block, plus a dictionary's tables */
 
+const char zstd_no_memory[] = "out of memory"; /* not menu text */
+
 static const char *fail_why;
+static bool out_of_memory; /* an allocation failed during this call */
 static void *live[MAX_LIVE];
 static int live_count;
 
+/* --- a stream's arena ----------------------------------------------------------------------------
+ * A stream's decoder allocates a few times each block, hundreds of times in a big file. From the heap,
+ * the decoding could run out half way, after the game took the memory meanwhile. So a stream takes what
+ * its decoder needs at its start, in two parts after the decoder's pattern:
+ *   small: its Huffman and FSE tables, kept from block to block, a slot each. In a frame a real encoder
+ *     makes they're at most 4 KiB (12-bit Huffman, 9-bit FSE), each freed before the one replacing it is
+ *     made: at most 11 live at once (the literals' Huffman table: 2 blocks; the sequences' three FSE
+ *     tables: 3 each), and the small literals and sequences of a block besides (13 seen in the game's
+ *     files).
+ *   big: a block's literals and its sequences, freed at the block's end. They're put one after the other,
+ *     from the start again once neither is left. Literals L bytes and N sequences (12 bytes each) take at
+ *     most a block's 128 KiB: each sequence's match is 3 bytes or more, so 3N <= 128 KiB - L, and
+ *     L + 12N <= 4 x 128 KiB - 3L.
+ * A frame needing more is damaged. What the arena can't hold otherwise comes from the heap. */
+#define STREAM_BLOCK_MAX ((size_t)128 * 1024) /* a block's most output, and most input */
+#define ARENA_SMALL 4096
+#define ARENA_SLOTS 16
+#define ARENA_BIG (4 * STREAM_BLOCK_MAX + 2 * ALLOC_ALIGN)
+#define ARENA_SIZE (ARENA_SLOTS * ARENA_SMALL + ARENA_BIG)
+_Static_assert(ARENA_SLOTS <= 32, "a bit each in small_used");
+
+typedef struct {
+  uint8_t *mem; /* the small slots, then the big part */
+  uint32_t small_used;
+  size_t big_at; /* the big part's first free byte */
+  int big_live;  /* blocks in the big part */
+} arena_t;
+static arena_t *arena; /* the stream's during its calls, else 0 */
+
+__attribute__((noreturn)) void zstd_shim_fail(const char *why);
+
+static void arena_clear(arena_t *a)
+{
+  a->small_used = 0;
+  a->big_at = 0;
+  a->big_live = 0;
+}
+
 void *zstd_shim_alloc(size_t size)
 {
+  /* at least one unit: the decoder asks for 0 bytes (a block with no literals), and NULL is an error */
+  size_t n = size ? (size + ALLOC_ALIGN - 1) & ~(size_t)(ALLOC_ALIGN - 1) : ALLOC_ALIGN;
+  if (arena && n > ARENA_BIG)
+    zstd_shim_fail("a block bigger than the format allows"); /* damaged, not out of memory (not menu text) */
+  if (arena) {
+    if (n <= ARENA_SMALL && ~arena->small_used) {
+      int slot = __builtin_ctz(~arena->small_used);
+      arena->small_used |= 1u << slot;
+      return arena->mem + (size_t)slot * ARENA_SMALL;
+    }
+    if (n <= ARENA_BIG - arena->big_at) {
+      void *p = arena->mem + ARENA_SLOTS * ARENA_SMALL + arena->big_at;
+      arena->big_at += n;
+      arena->big_live++;
+      return p;
+    }
+  }
   if (live_count == MAX_LIVE) {
     log_printf("zstd: more than %d blocks at once", MAX_LIVE);
-    return 0; /* the decoder reports it as an allocation error */
+    return 0; /* the decoder reports it as an allocation error (more memory wouldn't help) */
   }
-  /* at least one unit: the decoder asks for 0 bytes (a block with no sequences), and NULL is an error */
-  void *p = aligned_alloc(ALLOC_ALIGN, size ? (size + ALLOC_ALIGN - 1) & ~(size_t)(ALLOC_ALIGN - 1) : ALLOC_ALIGN);
-  if (p)
+  void *p = aligned_alloc(ALLOC_ALIGN, n);
+  if (p) {
     live[live_count++] = p;
-  else
+  } else {
     log_printf("zstd: no memory for %u bytes", (unsigned)size);
+    out_of_memory = true;
+  }
   return p;
 }
 
@@ -56,6 +115,14 @@ void zstd_shim_free(void *p)
 {
   if (!p)
     return;
+  uintptr_t at = (uintptr_t)p - (uintptr_t)(arena ? arena->mem : 0);
+  if (arena && at < ARENA_SIZE) {
+    if (at < ARENA_SLOTS * ARENA_SMALL)
+      arena->small_used &= ~(1u << (at / ARENA_SMALL));
+    else if (--arena->big_live == 0)
+      arena->big_at = 0;
+    return;
+  }
   for (int i = live_count - 1; i >= 0; i--) {
     if (live[i] == p) {
       live[i] = live[--live_count];
@@ -76,6 +143,12 @@ static void free_live(void)
 {
   while (live_count)
     free(live[--live_count]);
+}
+
+/* an error's reason, for *why */
+static const char *failed_why(void)
+{
+  return out_of_memory ? zstd_no_memory : fail_why ? fail_why : "error";
 }
 
 /* the decoder itself; its own names are static to this file except the four it exports */
@@ -149,10 +222,11 @@ size_t zstd_decompress(void *dst, size_t cap, const void *src, size_t len, const
 {
   live_count = 0;
   fail_why = 0;
+  out_of_memory = false;
   if (JUMP_SET(jump)) {
     free_live();
     if (why)
-      *why = fail_why ? fail_why : "error";
+      *why = failed_why();
     return 0;
   }
   size_t n = dict ? ZSTD_decompress_with_dict(dst, cap, src, len, (dictionary_t *)dict)
@@ -163,10 +237,11 @@ size_t zstd_decompress(void *dst, size_t cap, const void *src, size_t len, const
 
 /* --- a frame a block at a time (zstd_stream_t) ------------------------------------------------ */
 
-#define STREAM_BLOCK_MAX ((size_t)128 * 1024)       /* a block's most output, and most input */
-#define STREAM_IN_SIZE ((size_t)256 * 1024)        /* read at a time (a block, compressed, fits) */
-#define STREAM_SLIDE_ROOM ((size_t)2 * 1024 * 1024) /* output past the window before it slides back */
-#define STREAM_SLIDE_PIECE ((size_t)1024 * 1024)    /* the slide is done this much at a time, a step each */
+#define STREAM_IN_SIZE ((size_t)256 * 1024) /* read at a time (a block, compressed, fits) */
+/* output past the window before it slides back: less memory, against more copying (the whole window is
+ * copied back each time: for the game's Common archive, 8 MiB for every MiB of output) */
+#define STREAM_SLIDE_ROOM ((size_t)1024 * 1024)
+#define STREAM_SLIDE_PIECE STREAM_SLIDE_ROOM /* the slide is done this much at a time, a step each */
 #define STREAM_MAX_WINDOW ((size_t)16 * 1024 * 1024)
 
 struct zstd_stream {
@@ -180,7 +255,8 @@ struct zstd_stream {
   size_t slide_from, slide_done, slide_len; /* a slide of out[slide_from...] back to out[0...] under way */
   bool in_end, done, failed;
   frame_context_t ctx;
-  void *live[MAX_LIVE];  /* what the decoder has allocated: its tables live from step to step */
+  arena_t arena;
+  void *live[MAX_LIVE];  /* what the decoder took from the heap: its tables live from step to step */
   int live_count;
 };
 
@@ -189,6 +265,9 @@ static void stream_enter(zstd_stream_t *s)
 {
   memcpy(live, s->live, sizeof(live));
   live_count = s->live_count;
+  arena = s->arena.mem ? &s->arena : 0;
+  fail_why = 0;
+  out_of_memory = false;
 }
 
 static void stream_leave(zstd_stream_t *s)
@@ -196,6 +275,7 @@ static void stream_leave(zstd_stream_t *s)
   memcpy(s->live, live, sizeof(live));
   s->live_count = live_count;
   live_count = 0;
+  arena = 0;
 }
 
 /* at least `need` bytes in in[in_pos...], unless the file ends first */
@@ -219,7 +299,9 @@ static void stream_fill(zstd_stream_t *s, size_t need)
 static void stream_release(zstd_stream_t *s)
 {
   stream_enter(s);
-  free_live(); /* the decoder's tables */
+  free_live(); /* what the decoder took from the heap */
+  stream_leave(s);
+  free(s->arena.mem);
   free(s->in);
   free(s->out);
   free(s);
@@ -234,18 +316,18 @@ zstd_stream_t *zstd_stream_new(zstd_read_t read, void *user, const char **why)
   }
   if (!s || !s->in) {
     free(s);
-    *why = "out of memory"; /* not menu text */
+    *why = zstd_no_memory;
     return 0;
   }
   s->read = read;
   s->user = user;
   stream_fill(s, 32); /* the magic number and the frame header (at most 14 bytes) */
-  live_count = 0;
-  fail_why = 0;
+  stream_enter(s);
   if (JUMP_SET(jump)) {
+    const char *reason = failed_why();
     stream_leave(s); /* what the header's decoding allocated, freed with the rest */
     stream_release(s);
-    *why = fail_why ? fail_why : "error";
+    *why = reason;
     return 0;
   }
   istream_t in = IO_make_istream(s->in, s->in_len);
@@ -258,9 +340,16 @@ zstd_stream_t *zstd_stream_new(zstd_read_t read, void *user, const char **why)
   if (!s->window || s->window > STREAM_MAX_WINDOW)
     ERROR("its window is too big to stream"); /* not menu text */
   s->out_cap = s->window + STREAM_SLIDE_ROOM + STREAM_BLOCK_MAX;
+  size_t content = s->ctx.header.frame_content_size; /* 0: the header doesn't say */
+  if (content && content < s->out_cap - STREAM_BLOCK_MAX)
+    s->out_cap = content + STREAM_BLOCK_MAX; /* all of it fits: it never slides */
+  /* all the memory at the start: the decoding can't run out half way */
   s->out = aligned_alloc(ALLOC_ALIGN, s->out_cap);
-  if (!s->out)
+  s->arena.mem = s->out ? aligned_alloc(ALLOC_ALIGN, ARENA_SIZE) : 0;
+  if (!s->arena.mem) {
+    out_of_memory = true;
     ERROR("out of memory"); /* not menu text */
+  }
   s->in_pos = (size_t)(in.ptr - s->in);
   stream_leave(s);
   return s;
@@ -273,13 +362,13 @@ int zstd_stream_step(zstd_stream_t *s, size_t budget, zstd_sink_t sink, void *us
   if (s->done)
     return 0;
   stream_enter(s);
-  fail_why = 0;
   if (JUMP_SET(jump)) {
+    *why = failed_why();
     free_live(); /* the decoder's tables too: the stream is over */
+    arena_clear(&s->arena);
     memset(&s->ctx, 0, sizeof(s->ctx));
-    s->live_count = live_count = 0;
+    stream_leave(s);
     s->failed = true;
-    *why = fail_why ? fail_why : "error";
     return -1;
   }
   size_t produced = 0;
@@ -311,8 +400,10 @@ int zstd_stream_step(zstd_stream_t *s, size_t budget, zstd_sink_t sink, void *us
       ERROR("it ends early"); /* not menu text */
     head = s->in + s->in_pos;
     if (s->out_pos + STREAM_BLOCK_MAX > s->out_cap) { /* back to the start, keeping the window */
-      size_t keep = s->window < s->out_pos ? s->window : s->out_pos;
-      s->slide_from = s->out_pos - keep; /* at least STREAM_SLIDE_ROOM: a piece never overlaps its source */
+      if (s->out_pos <= s->window)
+        ERROR("it's longer than its header says"); /* out_cap was made for its size; not menu text */
+      size_t keep = s->window;
+      s->slide_from = s->out_pos - keep; /* (memmove: each piece lands before what's still to move) */
       s->slide_done = 0;
       s->slide_len = keep;
       continue;

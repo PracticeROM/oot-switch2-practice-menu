@@ -46,6 +46,10 @@ def _mask_row(mask):
 
 
 MASKS = [_mask_row(mask) for mask in ("Keaton", "Skull", "Spooky", "Bunny", "Goron", "Zora", "Gerudo", "Truth")]
+# the amiibo masks (Link's and Zelda's amiibo): one slot of their own on the equipment screen (PouchTable's
+# Pa_HeadEquip_03), worn from there, never put on a button (the item buttons have no choice for them)
+AMIIBO_MASKS = [("fairy-kid mask", "Armor_Child_Mask_Amiibo0", None),
+                ("princess mask", "Armor_Child_Mask_Amiibo1", None)]
 # item title -> the item name the game uses when it is put on a button
 BUTTON_ITEM = {"Fairy Slingshot": "SlingShot", "Fairy Bow": "Bow", "Arrow Fire": "FireArrow",
                "Arrow Ice": "IceArrow", "Arrow Light": "LightArrow", "Boomerang": "Boomerang",
@@ -301,6 +305,7 @@ def write_items(out):
     out.end_array("data_gear")
 
     out.pouch_table("data_masks", MASKS)
+    out.pouch_table("data_amiibo_masks", AMIIBO_MASKS)
     out.pouch_table("data_trade_child", TRADE_ITEMS[:N_CHILD_TRADE_ITEMS])
     out.pouch_table("data_trade_adult", TRADE_ITEMS[N_CHILD_TRADE_ITEMS:])
 

@@ -323,8 +323,8 @@ static char plain_char(char ch)
     case 0:
     case GFX_PICTURE:
     case GFX_WIDE_REST: return ' ';
-    default: /* a picture's number (GFX_PICTURE_ID: the pictures number under gpuui.h's GPU_IMAGES, 80) */
-      return (unsigned char)ch >= 0xA0 && (unsigned char)ch < 0xA0 + 80 ? ' ' : ch;
+    default: /* a picture's number (GFX_PICTURE_ID: the pictures number under gpuui.h's GPU_IMAGES, 88) */
+      return (unsigned char)ch >= 0xA0 && (unsigned char)ch < 0xA0 + 88 ? ' ' : ch;
   }
 }
 

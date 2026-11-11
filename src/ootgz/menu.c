@@ -462,10 +462,10 @@ static void item_line(menu_item_t *item, char *buf, int len)
   int picture = item->picture;
   if (picture && item->kind == MI_OPTION && item->choice_pictures) { /* the chosen one's picture */
     int choice = item->get_option(item);
-    if (choice >= 0 && choice < item->n_choices && item->choice_pictures[choice])
-      picture = item->choice_pictures[choice];
+    if (choice >= 0 && choice < item->n_choices)
+      picture = item->choice_pictures[choice]; /* 0: none (GAMEIMAGE_PRO, never drawn as a picture) */
   }
-  if (picture && picture_shown(item)) { /* the game's picture of the item before its label */
+  if (item->picture && picture_shown(item)) { /* the game's picture of the item before its label */
     snprintf(pictured, sizeof(pictured), "%c%c %s", GFX_PICTURE, GFX_PICTURE_ID(picture), label);
     label = pictured;
   }

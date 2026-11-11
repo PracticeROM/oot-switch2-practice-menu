@@ -61,6 +61,12 @@ const pouch_one_t data_masks[] = {
 };
 const int data_n_masks = sizeof(data_masks) / sizeof(*data_masks);
 
+const pouch_one_t data_amiibo_masks[] = {
+  { "fairy-kid mask", "Armor_Child_Mask_Amiibo0", NULL },
+  { "princess mask", "Armor_Child_Mask_Amiibo1", NULL },
+};
+const int data_n_amiibo_masks = sizeof(data_amiibo_masks) / sizeof(*data_amiibo_masks);
+
 const pouch_one_t data_trade_child[] = {
   { "weird egg", "Item_WeirdEgg", "WeirdEgg" },
   { "cucco", "Item_AlarmCucco", "AlarmCucco" },

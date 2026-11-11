@@ -164,6 +164,12 @@ Bools by setting:
   double defense, gauntlets, scale, wallet and bags), `OcarinaArray`, `StoneArray`, `MedalArray`, `NoDisplayArray`
   (deku seeds, heart pieces). Slots holding an upgrade chain list it highest first. ootmenu's items list follows
   `ItemArray`.
+- **The amiibo masks**: `Armor_Child_Mask_Amiibo0` (the Fairy-Kid Mask, Link's amiibo) and `…Amiibo1` (the
+  Princess Mask, Zelda's), names from `Mals/*/ActorMsg/PouchContent.msbt`. Same actor and pouch setup as the
+  shop masks (`Armor_Mask_Base`, `MaskDefault`), but their own `EquipmentArray` slot (`Pa_HeadEquip_03`, both in
+  it, `SpecialDeal: amiibo`) beside the shop masks' (`Pa_HeadEquip_02`), and no choice of the item buttons' Enum
+  (its `Amiibo` is the amiibo item, `Pouch_Amiibo`). Held as the others are: `PouchData.<name>.StockNum` and
+  `IsGet.<name>`. The menu's **amiibo mask** sets those two, one mask at a time.
 - `tools/re64.py` does static analysis on a dump of main (`main.bin` = raw image from main's base, `main.base` = its
   load address in hex): string/function cross-references (`xref`), disassembly with field names (`dis`, `func`).
 

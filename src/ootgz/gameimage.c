@@ -19,17 +19,26 @@
  * take more of the game's heap than it can spare, so each is decoded as it's read (astc.c), its blocks put
  * in their places (the packaged layout: GOBs of 64 bytes x 8 rows, stacked 2^layout[0] high in each column
  * of them; on the Switch 2 a GOB's 16-byte sectors go row 0-1 / column / row 2 / column 1, found against
- * the GPU's own drawing of one), and shrunk to GPU_ICON_PX square into gpuui's icon atlas (1.6 MB). */
+ * the GPU's own drawing of one), and shrunk to GPU_ICON_PX square into gpuui's icon atlas (1.6 MB).
+ *
+ * The game's heap is small. Decoding the archive takes about 15 MB of it for a few seconds (its 8 MiB window
+ * above all, taken at the start with what the decoder needs: zstd.c), so it can't run out half way. Each
+ * part (the archive's pictures, the icons) goes on without the other, and one that ran out of memory is
+ * tried again later. Once made, the pictures are kept on the SD card (cache, below): later starts read them
+ * from there, with no more memory than they take anyway. */
 #include "gameimage.h"
 
 #include <stddef.h>
 #include <stdint.h>
 
 #include "gamefile.h"
+#include "gfx.h"
 #include "gpuui.h"
 #include "sdfs.h"
+#include "settings.h"
 #include "sys.h"
 #include "astc.h"
+#include "z64hd.h"
 #include "zstd.h"
 
 void *aligned_alloc(size_t align, size_t size); /* from main */
@@ -44,6 +53,9 @@ void free(void *p);                             /* from main */
 #define STEP_BYTES (64u << 10)   /* decoded between looks at the clock */
 #define ICON_STEP_BYTES (8u << 10) /* an icon's (its blocks decoded too) */
 #define STEP_MS 2                /* a frame's time for it */
+/* a decoding tried again leaves the game this much more: it may be in the middle of a scene */
+#define RETRY_HEADROOM (4u << 20)
+#define RETRY_MAX 8 /* tries after running out of memory, before giving up */
 /* NVN's ASTC 4x4 (the data shown as stored, no sRGB decode, as everything else is drawn) and BC4 */
 #define NVN_FORMAT_ASTC_4X4 0x79
 #define NVN_FORMAT_BC4 0x49
@@ -87,8 +99,17 @@ static const char *const names[GAMEIMAGES] = {
   [GAMEPIC_SCRUB_SEED] = "Item_ScrubBusinessSeed",
 };
 
-/* the shared archive (its pictures [0, GAMEIMAGES_SHARED)), then the icons one file each */
-static enum { IDLE, SHARED, ICONS, DONE, FAILED } state;
+/* what's under way, one thing at a time: the shared archive's pictures [0, GAMEIMAGES_SHARED) read from
+ * the cache or decoded, the icons read from the cache or decoded one file each, a cache file written */
+static enum { NOTHING, READ_SHARED, DECODE_SHARED, READ_ICONS, DECODE_ICON, SAVE } task;
+/* the two parts: each waits to be read, is tried again later (after running out of memory), is done, or
+ * can't be had */
+typedef struct {
+  enum { PART_WAITING, PART_LATER, PART_DONE, PART_LOST } state;
+  uint64_t at;    /* PART_LATER: when (sys_tick) */
+  unsigned tries; /* the times it ran out of memory */
+} part_t;
+static part_t shared, icons;
 static int lo, hi;    /* the pictures the file being read has: [lo, hi) */
 static int icon;      /* ICONS: the icon being read */
 static fs_file_t file;
@@ -103,14 +124,18 @@ static struct {
   gpu_image_t gpu;
 } want[GAMEIMAGES];
 static uint8_t *mem; /* the shared pictures' */
-static size_t mem_size;
-static int icons_made;
+static size_t mem_size, mem_taken; /* what they need (0: not known yet), what mem holds */
+/* a reason a part is tried again later, like zstd_no_memory (compared as a pointer) */
+static const char no_headroom[] = "it would leave the game too little memory";
 static bool switch2;  /* the file's platform: the Switch 2's ("Ounc") GOB layout */
 
 /* the icon being read: its texture's blocks, a block split between two reads, its shrunk sums */
 #define ICON_SLOTS (GPU_ICON_COLS * GPU_ICON_ROWS)
-#define ICONS_MEM (2 * ((size_t)GPU_ICON_PX * GPU_ICON_PX * ICON_SLOTS * 4) + 0x20000)
-_Static_assert(GAMEIMAGES - GAMEIMAGES_SHARED <= ICON_SLOTS, "an icon slot each");
+#define ICONS_STAGING ((size_t)GPU_ICON_PX * GPU_ICON_PX * ICON_SLOTS * 4) /* the atlas, as gameimage fills it */
+#define ICONS_MEM (2 * ICONS_STAGING + 0x20000)
+#define ICONS (GAMEIMAGES - GAMEIMAGES_SHARED)
+#define ALL_ICONS (ICONS == 64 ? ~0ull : (1ull << ICONS) - 1)
+_Static_assert(ICONS <= ICON_SLOTS && ICON_SLOTS <= 64, "an icon slot each, a bit each");
 _Static_assert(GAMEIMAGES <= GPU_ICONS_IMAGE, "the icons' atlas after the pictures");
 static uint8_t *icons_mem;
 static int tex_w, tex_h, blocks_w, blocks_h, gobs_w, gob_h;
@@ -119,6 +144,9 @@ static int carried;
 static uint32_t sums[GPU_ICON_PX * GPU_ICON_PX][4];
 static uint16_t counts[GPU_ICON_PX * GPU_ICON_PX];
 static uint8_t boxes[ICON_SLOTS][4]; /* each icon's covered part (gameimage_icon_box), in its slot's pixels */
+static uint64_t icons_todo = ALL_ICONS; /* a bit per icon: not read yet, or to try again */
+static uint64_t icons_filled, icons_lost; /* ... in its slot; left out (not in this version, or damaged) */
+static uint64_t icons_short;              /* ... out of memory in this pass: tried again in the next */
 #define COVERED_ALPHA 24             /* a pixel at least this opaque is part of the picture */
 static int frames;
 static uint64_t ticks, decoded;
@@ -153,8 +181,8 @@ static bool name_is(uint64_t at, const char *name)
   return !name[n];
 }
 
-/* the wanted pictures' places from the header's records, and memory for them; false: not the file this
- * knows (sink_why says why) */
+/* the wanted pictures' places from the header's records (and mem_size, the memory for them); false: not
+ * the file this knows (sink_why says why) */
 static bool parse(void)
 {
   sink_why = "its header isn't the one this module knows"; /* not menu text */
@@ -195,7 +223,7 @@ static bool parse(void)
       }
     }
   }
-  if (state == ICONS) { /* an icon: decoded as it comes (icon_bytes) */
+  if (task == DECODE_ICON) { /* an icon: decoded as it comes (icon_bytes) */
     const gpu_image_t *im = &want[icon].gpu;
     if (!im->size || im->format != NVN_FORMAT_ASTC_4X4) {
       sink_why = im->size ? "not ASTC 4x4" : "no picture of that name in it"; /* not menu text */
@@ -225,12 +253,6 @@ static bool parse(void)
     at = round_up(at + want[k].gpu.size, IMAGE_ALIGN);
   }
   mem_size = round_up(at, PAGE);
-  mem = aligned_alloc(PAGE, mem_size);
-  if (!mem) {
-    sink_why = "out of memory"; /* not menu text */
-    return false;
-  }
-  __builtin_memset(mem, 0, mem_size);
   sink_why = 0;
   return true;
 }
@@ -241,7 +263,7 @@ static bool all_here(void)
   for (int k = lo; k < hi; k++)
     if (want[k].got < want[k].gpu.size)
       return false;
-  return parsed && (state == ICONS || want[GAMEIMAGE_PRO].gpu.size);
+  return parsed && (task == DECODE_ICON || want[GAMEIMAGE_PRO].gpu.size);
 }
 
 /* one of the icon's blocks, `off` bytes into its texture: in its place, its texels added to the sums of the
@@ -317,6 +339,31 @@ void gameimage_icon_box(int slot, float box[4])
     box[i] = slot >= 0 && slot < ICON_SLOTS ? (float)boxes[slot][i] / GPU_ICON_PX : (float)(i >= 2);
 }
 
+/* the shared pictures' memory, mem_size bytes, zeroed; false: out of memory */
+static bool take_mem(void)
+{
+  if (mem && mem_taken == mem_size)
+    return true;
+  free(mem);
+  mem_taken = 0;
+  if (!(mem = aligned_alloc(PAGE, mem_size)))
+    return false;
+  __builtin_memset(mem, 0, mem_size);
+  mem_taken = mem_size;
+  return true;
+}
+
+/* with everything taken: tried again (the game may be in the middle of a scene), it leaves the game
+ * RETRY_HEADROOM more */
+static bool headroom(void)
+{
+  if (!shared.tries)
+    return true;
+  void *room = aligned_alloc(PAGE, RETRY_HEADROOM);
+  free(room);
+  return room != 0;
+}
+
 /* the file's bytes [at, at + n), in order: the header kept, then the pictures' data copied (the shared
  * archive's) or decoded (an icon's) */
 static bool sink(void *user, uint64_t at, const uint8_t *data, size_t n)
@@ -326,8 +373,12 @@ static bool sink(void *user, uint64_t at, const uint8_t *data, size_t n)
   if (!parsed) {
     if (!head) { /* the first block: the header's size is in it */
       head_need = at == 0 && n >= 0x38 ? rd(data + 0x30, 8) : 0;
-      if (head_need < 0x48 || head_need > HEADER_MAX || !(head = aligned_alloc(16, (size_t)head_need))) {
+      if (head_need < 0x48 || head_need > HEADER_MAX) {
         sink_why = "its header isn't the one this module knows"; /* not menu text */
+        return false;
+      }
+      if (!(head = aligned_alloc(16, (size_t)head_need))) {
+        sink_why = zstd_no_memory;
         return false;
       }
     }
@@ -338,14 +389,28 @@ static bool sink(void *user, uint64_t at, const uint8_t *data, size_t n)
     }
     if (head_len < head_need)
       return true;
-    if (!(parsed = parse()))
+    parsed = parse();
+    free(head); /* the records are read: the pictures' memory instead */
+    head = 0;
+    if (!parsed)
       return false;
+    if (task == DECODE_SHARED) {
+      bool had = mem && mem_taken == mem_size; /* taken with the stream (a try again), and checked then */
+      if (!take_mem()) {
+        sink_why = zstd_no_memory;
+        return false;
+      }
+      if (!had && !headroom()) {
+        sink_why = no_headroom;
+        return false;
+      }
+    }
   }
   for (int k = lo; k < hi; k++) {
     uint64_t from = at > want[k].at ? at : want[k].at;
     uint64_t to = at + n < want[k].at + want[k].gpu.size ? at + n : want[k].at + want[k].gpu.size;
     if (from < to) {
-      if (state == ICONS)
+      if (task == DECODE_ICON)
         icon_bytes(data + (from - at), from - want[k].at, (size_t)(to - from));
       else
         __builtin_memcpy(mem + want[k].gpu.offset + (from - want[k].at), data + (from - at), (size_t)(to - from));
@@ -375,126 +440,624 @@ static void close_all(void)
   parsed = false;
 }
 
-static void fail(const char *why)
-{
-  log_printf("game pictures: %s: %s (after %u KiB); the input display keeps its glyphs", ARCHIVE,
-             why ? why : "error", (unsigned)(decoded >> 10));
-  close_all();
-  free(mem);
-  mem = 0;
-  state = FAILED;
-}
-
-/* an icon's file: content:/UI/Tex/Icon/<name>.bntx.zs */
-static void icon_path(int k, char *buf, size_t len)
+/* parts[0] + parts[1] + ... into buf */
+static void join(char *buf, size_t len, const char *const *parts, int n)
 {
   size_t at = 0;
-  const char *parts[3] = { ICON_DIR, names[k], ".bntx.zs" };
-  for (int p = 0; p < 3; p++)
+  for (int p = 0; p < n; p++)
     for (const char *c = parts[p]; *c && at + 1 < len; c++)
       buf[at++] = *c;
   buf[at] = 0;
 }
 
-/* opens a file to read with a stream; false (logged) if it can't */
-static bool open_stream(const char *path)
+/* an icon's file: content:/UI/Tex/Icon/<name>.bntx.zs */
+static void icon_path(int k, char *buf, size_t len)
 {
-  const char *why = 0;
-  if (fs_open(&file, path, FS_READ) != 0)
-    return false;
-  file_open = true;
-  stream = zstd_stream_new(read_file, 0, &why);
-  if (!stream) {
-    log_printf("game pictures: %s: %s", path, why ? why : "can't read it");
-    close_all();
+  const char *parts[3] = { ICON_DIR, names[k], ".bntx.zs" };
+  join(buf, len, parts, 3);
+}
+
+/* a frame's time is up */
+static bool time_up(uint64_t start)
+{
+  return sys_tick() - start >= sys_tick_freq() * STEP_MS / 1000;
+}
+
+/* --- trying again: after running out of memory, a little later, then less and less often --------- */
+
+static const uint16_t retry_seconds[] = { 10, 30, 60, 120, 300 };
+#define RETRIES (sizeof(retry_seconds) / sizeof(*retry_seconds))
+
+/* why (zstd_no_memory or no_headroom): later, or lost after RETRY_MAX tries; false: lost */
+static bool try_later(part_t *part, const char *what, const char *why)
+{
+  if (++part->tries > RETRY_MAX) {
+    log_printf("game pictures: %s: %s; given up after %d tries", what, why, RETRY_MAX);
+    part->state = PART_LOST;
     return false;
   }
+  unsigned secs = retry_seconds[part->tries <= RETRIES ? part->tries - 1 : RETRIES - 1];
+  part->at = sys_tick() + sys_tick_freq() * secs;
+  part->state = PART_LATER;
+  log_printf("game pictures: %s: %s; trying again in %u s", what, why, secs);
   return true;
 }
 
-/* the next icon from `from` whose file is there, open to read; GAMEIMAGES when there are no more */
-static int next_icon(int from)
+static bool retryable(const char *why)
 {
-  char path[128];
-  for (int k = from; k < GAMEIMAGES; k++) {
-    icon_path(k, path, sizeof(path));
-    if (open_stream(path)) {
-      lo = k, hi = k + 1;
-      return k;
-    }
-    log_printf("game pictures: no icon %s in this version; left out", names[k]);
-  }
-  return GAMEIMAGES;
+  return why == zstd_no_memory || why == no_headroom;
 }
 
-bool gameimage_failed(void)
+static bool due(const part_t *part)
 {
-  return state == FAILED;
+  return part->state == PART_WAITING || (part->state == PART_LATER && sys_tick() >= part->at);
+}
+
+/* --- the cache: the pictures as they end up, on the SD card -----------------------------------------
+ * One file each for the shared pictures (4.6 MB, as they're drawn) and for the icons' atlas (0.9 MB),
+ * named after the game's version: a header, then the data. The header says what the file was made from
+ * (key: this module's version and layout, the pictures' names, and the archive's size or the icon files'
+ * sizes) and holds a checksum of it all; it's written last, so a file cut short is never taken. A file
+ * that isn't right is deleted and made afresh, and not read again this session.
+ * The SD card's data goes through `bounce`: memory the file system uses for a call is locked meanwhile, and
+ * the pictures' memory may be made into the GPU's at any moment (gpuui.c, on the render thread). */
+#define CACHE_DIR SD_DIR "/cache"
+#define CACHE_MAGIC 0x31434950u /* "PIC1" */
+#define CACHE_FORMAT 1          /* one more whenever the layout or what's in it changes */
+#define CACHE_MAX (64u << 20)
+#define CACHE_STEP (64u << 10) /* read or written between looks at the clock */
+#define HASH_START 0xcbf29ce484222325ull
+#define HASH_PRIME 0x100000001b3ull
+
+typedef struct {
+  uint32_t magic, format;
+  uint64_t key;
+  uint64_t size; /* the data's, after the header */
+  uint64_t sum;  /* of the header (its magic and sum 0) and the data */
+  gpu_image_t images[GAMEIMAGES_SHARED]; /* the shared pictures' places in the data */
+  uint8_t boxes[ICON_SLOTS][4];          /* the icons' covered parts */
+  uint64_t filled;                       /* the icons' slots that have one */
+} cache_head_t;
+
+enum { CACHE_SHARED, CACHE_ICONS };
+static const char *const cache_kinds[2] = { "pictures", "icons" };
+static struct {
+  char path[96];
+  fs_file_t file;
+  bool open;
+  cache_head_t head;
+  uint8_t *data;
+  size_t done;
+  uint64_t sum;
+} cache;
+static bool cache_off[2];  /* a file that wasn't right was dropped: not read again this session */
+static uint64_t keys[2];   /* what each kind is made from */
+static int icon_sizes_at = GAMEIMAGES_SHARED; /* the icons' key: the icon files' sizes hashed up to here */
+static uint8_t bounce[CACHE_STEP] __attribute__((aligned(64)));
+
+/* FNV-1a, 8 bytes at a time, each step's high bits folded back so a change anywhere reaches all of them */
+static uint64_t hash(uint64_t h, const void *data, size_t n)
+{
+  const uint8_t *p = data;
+  for (; n >= 8; p += 8, n -= 8) {
+    uint64_t w;
+    __builtin_memcpy(&w, p, 8);
+    h = (h ^ w) * HASH_PRIME;
+    h ^= h >> 32;
+  }
+  for (; n; p++, n--)
+    h = (h ^ *p) * HASH_PRIME;
+  return h;
+}
+
+/* the start of a key: this module's version and how the pictures are kept, and the names [from, to) */
+static uint64_t key_start(int from, int to)
+{
+  const uint32_t layout[] = { CACHE_FORMAT, (uint32_t)sizeof(cache_head_t), (uint32_t)sizeof(gpu_image_t), IMAGE_ALIGN,
+                              GPU_ICON_PX, GPU_ICON_COLS, GPU_ICON_ROWS, COVERED_ALPHA };
+  uint64_t h = hash(HASH_START, layout, sizeof(layout));
+  h = hash(h, PACKAGE_VERSION, sizeof(PACKAGE_VERSION));
+  for (int k = from; k < to; k++)
+    h = hash(h, names[k], strlen(names[k]) + 1);
+  return h;
+}
+
+/* the cache can be used: the SD card is there, and this kind's file hasn't been dropped */
+static bool cache_usable(int kind)
+{
+  return settings_sd() && !cache_off[kind];
+}
+
+static uint64_t head_sum(const cache_head_t *head_in)
+{
+  cache_head_t h;
+  __builtin_memcpy(&h, head_in, sizeof(h));
+  h.magic = 0;
+  h.sum = 0;
+  return hash(HASH_START, &h, sizeof(h));
+}
+
+static void cache_path(int kind)
+{
+  const char *parts[5] = { CACHE_DIR "/", cache_kinds[kind], "-", z64hd_game ? z64hd_game->version : "game", ".bin" };
+  join(cache.path, sizeof(cache.path), parts, 5);
+}
+
+static void cache_close(void)
+{
+  if (cache.open)
+    fs_close(cache.file);
+  cache.open = false;
+}
+
+/* the file isn't right: deleted, to be made afresh, and not read again this session */
+static void cache_drop(int kind, const char *why)
+{
+  cache_close();
+  log_printf("game pictures: %s: %s; made afresh", cache.path, why);
+  fs_delete_file(cache.path);
+  cache_off[kind] = true;
+}
+
+/* opens a cache file and reads its header: true if it's this game's, made from these files */
+static bool cache_open(int kind)
+{
+  if (!cache_usable(kind))
+    return false;
+  cache_path(kind);
+  if (fs_open(&cache.file, cache.path, FS_READ) != 0)
+    return false; /* not made yet */
+  cache.open = true;
+  int64_t size = 0;
+  size_t got = 0;
+  __builtin_memset(&cache.head, 0, sizeof(cache.head));
+  if (fs_size(&size, cache.file) != 0 || fs_read(&got, cache.file, 0, &cache.head, sizeof(cache.head)) != 0 ||
+      got != sizeof(cache.head) || cache.head.magic != CACHE_MAGIC || cache.head.format != CACHE_FORMAT ||
+      cache.head.key != keys[kind] || cache.head.size > CACHE_MAX ||
+      (uint64_t)size != sizeof(cache.head) + cache.head.size) {
+    cache_drop(kind, "it's from another version, or it was cut short");
+    return false;
+  }
+  cache.done = 0;
+  cache.sum = head_sum(&cache.head);
+  return true;
+}
+
+/* reads more of the data into cache.data: 1 more to come, 0 all of it (and right), -1 not right (dropped) */
+static int cache_read(int kind, uint64_t start)
+{
+  while (cache.done < cache.head.size && !time_up(start)) {
+    size_t n = cache.head.size - cache.done < CACHE_STEP ? (size_t)(cache.head.size - cache.done) : CACHE_STEP, got = 0;
+    if (fs_read(&got, cache.file, (int64_t)(sizeof(cache.head) + cache.done), bounce, n) != 0 || got != n) {
+      cache_drop(kind, "it can't be read");
+      return -1;
+    }
+    __builtin_memcpy(cache.data + cache.done, bounce, n);
+    cache.sum = hash(cache.sum, bounce, n);
+    cache.done += n;
+  }
+  if (cache.done < cache.head.size)
+    return 1;
+  cache_close();
+  if (cache.sum != cache.head.sum) {
+    cache_drop(kind, "it's damaged");
+    return -1;
+  }
+  return 0;
+}
+
+/* starts writing a cache file of `size` bytes of `data`, cache.head's pictures filled in: false if it can't.
+ * The file grows as it's written (made at its full size, a console's SD card may clear all of it at once). */
+static bool cache_start(int kind, uint8_t *data, size_t size)
+{
+  if (!settings_sd())
+    return false;
+  cache_path(kind);
+  cache.head.magic = 0;
+  cache.head.format = CACHE_FORMAT;
+  cache.head.key = keys[kind];
+  cache.head.size = size;
+  cache.head.sum = 0;
+  static const fs_write_option_t no_flush = { 0 };
+  fs_create_dir(SD_DIR); /* these fail harmlessly if they're there */
+  fs_create_dir(CACHE_DIR);
+  fs_delete_file(cache.path);
+  if (fs_create_file(cache.path, 0) != 0 || fs_open(&cache.file, cache.path, FS_WRITE | FS_ALLOW_APPEND) != 0) {
+    log_printf("game pictures: couldn't write %s", cache.path);
+    return false;
+  }
+  cache.open = true;
+  if (fs_write(cache.file, 0, &cache.head, sizeof(cache.head), &no_flush) != 0) { /* no magic yet */
+    cache_close();
+    fs_delete_file(cache.path);
+    log_printf("game pictures: couldn't write %s", cache.path);
+    return false;
+  }
+  cache.data = data;
+  cache.done = 0;
+  cache.sum = head_sum(&cache.head);
+  return true;
+}
+
+/* writes more of it, the header last: 1 more to come, 0 done, -1 it can't be written (deleted) */
+static int cache_write(uint64_t start)
+{
+  static const fs_write_option_t no_flush = { 0 }, flush = { FS_WRITE_FLUSH };
+  while (cache.done < cache.head.size && !time_up(start)) {
+    size_t n = cache.head.size - cache.done < CACHE_STEP ? (size_t)(cache.head.size - cache.done) : CACHE_STEP;
+    __builtin_memcpy(bounce, cache.data + cache.done, n);
+    if (fs_write(cache.file, (int64_t)(sizeof(cache.head) + cache.done), bounce, n, &no_flush) != 0)
+      goto failed;
+    cache.sum = hash(cache.sum, bounce, n);
+    cache.done += n;
+  }
+  if (cache.done < cache.head.size)
+    return 1;
+  cache.head.sum = cache.sum;
+  cache.head.magic = CACHE_MAGIC;
+  if (fs_write(cache.file, 0, &cache.head, sizeof(cache.head), &flush) != 0)
+    goto failed;
+  cache_close();
+  log_printf("game pictures: kept in %s for the next start", cache.path);
+  return 0;
+failed:
+  cache_close();
+  fs_delete_file(cache.path);
+  log_printf("game pictures: couldn't write %s", cache.path);
+  return -1;
+}
+
+/* --- the shared archive's pictures ------------------------------------------------------------------- */
+
+static void publish_shared(void)
+{
+  gpu_image_t images[GAMEIMAGES_SHARED];
+  for (int k = 0; k < GAMEIMAGES_SHARED; k++)
+    images[k] = want[k].gpu;
+  gpuui_images_publish(0, 0, mem, mem_size, images, GAMEIMAGES_SHARED);
+  shared.state = PART_DONE;
+}
+
+/* the cache's pictures fit in its data, and the controllers are there */
+static bool cached_shared_ok(void)
+{
+  const cache_head_t *h = &cache.head;
+  if (!h->size || h->size % PAGE)
+    return false;
+  for (int k = 0; k < GAMEIMAGES_SHARED; k++) {
+    const gpu_image_t *im = &h->images[k];
+    if (!im->size)
+      continue;
+    if (im->offset % IMAGE_ALIGN || im->size > IMAGE_MAX || im->size > h->size || im->offset > h->size - im->size ||
+        im->width <= 0 || im->height <= 0 || (im->format != NVN_FORMAT_ASTC_4X4 && im->format != NVN_FORMAT_BC4))
+      return false;
+  }
+  return h->images[GAMEIMAGE_PRO].size && h->images[GAMEIMAGE_GRIP].size && h->images[GAMEIMAGE_CONSOLE].size;
+}
+
+#define SHARED_WHAT "the menus' and controllers' pictures"
+
+static void shared_failed(const char *why)
+{
+  close_all();
+  free(mem);
+  mem = 0;
+  mem_taken = 0;
+  if (retryable(why)) {
+    if (why == zstd_no_memory && decoded)
+      log_printf("game pictures: %s: out of memory after %u KiB", ARCHIVE, (unsigned)(decoded >> 10));
+    if (!try_later(&shared, SHARED_WHAT, why))
+      log_printf("game pictures: the input display keeps its glyphs");
+    return;
+  }
+  log_printf("game pictures: %s: %s (after %u KiB); the input display keeps its glyphs", ARCHIVE,
+             why ? why : "error", (unsigned)(decoded >> 10));
+  shared.state = PART_LOST;
+}
+
+static void start_shared(void)
+{
+  lo = 0, hi = GAMEIMAGES_SHARED;
+  __builtin_memset(want, 0, sizeof(*want) * GAMEIMAGES_SHARED);
+  decoded = 0, ticks = 0, frames = 0;
+  sink_why = 0;
+  if (fs_open(&file, ARCHIVE, FS_READ) != 0) {
+    shared_failed("can't open it"); /* not menu text */
+    return;
+  }
+  file_open = true;
+  int64_t size = 0;
+  fs_size(&size, file);
+  keys[CACHE_SHARED] = hash(key_start(0, GAMEIMAGES_SHARED), &size, sizeof(size));
+  if (cache_open(CACHE_SHARED)) {
+    if (!cached_shared_ok()) {
+      cache_drop(CACHE_SHARED, "its pictures aren't right");
+    } else {
+      close_all(); /* the archive isn't needed */
+      mem_size = (size_t)cache.head.size;
+      if (!take_mem()) {
+        cache_close();
+        shared_failed(zstd_no_memory);
+        return;
+      }
+      cache.data = mem;
+      task = READ_SHARED;
+      return;
+    }
+  }
+  /* tried again with its size known: the pictures' memory first, all of it at once with the stream */
+  if (shared.tries && mem_size && !take_mem()) {
+    shared_failed(zstd_no_memory);
+    return;
+  }
+  const char *why = 0;
+  stream = zstd_stream_new(read_file, 0, &why);
+  if (!stream) {
+    shared_failed(why);
+    return;
+  }
+  if (mem && !headroom()) {
+    shared_failed(no_headroom);
+    return;
+  }
+  task = DECODE_SHARED;
+}
+
+/* --- the icons -------------------------------------------------------------------------------------- */
+
+#define ICONS_WHAT "the items' icons"
+
+/* the icons' atlas, handed to gpuui.c; false: out of memory */
+static bool icons_atlas(void)
+{
+  if (icons_mem)
+    return true;
+  if (!(icons_mem = aligned_alloc(PAGE, round_up(ICONS_MEM, PAGE))))
+    return false;
+  __builtin_memset(icons_mem, 0, round_up(ICONS_MEM, PAGE));
+  gpuui_icons_publish(icons_mem, round_up(ICONS_MEM, PAGE));
+  return true;
+}
+
+/* the icons' key, a few files a frame: the sizes of their files; false: not all of them yet */
+static bool icons_key(uint64_t start)
+{
+  if (icon_sizes_at == GAMEIMAGES_SHARED)
+    keys[CACHE_ICONS] = key_start(GAMEIMAGES_SHARED, GAMEIMAGES);
+  char path[128];
+  for (; icon_sizes_at < GAMEIMAGES && !time_up(start); icon_sizes_at++) {
+    int64_t size = -1;
+    fs_file_t f;
+    icon_path(icon_sizes_at, path, sizeof(path));
+    if (fs_open(&f, path, FS_READ) == 0) {
+      fs_size(&size, f);
+      fs_close(f);
+    }
+    keys[CACHE_ICONS] = hash(keys[CACHE_ICONS], &size, sizeof(size));
+  }
+  return icon_sizes_at == GAMEIMAGES;
+}
+
+/* opens icon k's file with a stream: 1 open, 0 left out (not in this version, or not readable), -1 out of
+ * memory */
+static int open_icon(int k)
+{
+  char path[128];
+  icon_path(k, path, sizeof(path));
+  if (fs_open(&file, path, FS_READ) != 0) {
+    log_printf("game pictures: no icon %s in this version; left out", names[k]);
+    return 0;
+  }
+  file_open = true;
+  const char *why = 0;
+  stream = zstd_stream_new(read_file, 0, &why);
+  if (stream) {
+    lo = k, hi = k + 1;
+    __builtin_memset(&want[k], 0, sizeof(want[k]));
+    sink_why = 0;
+    return 1;
+  }
+  close_all();
+  if (why == zstd_no_memory)
+    return -1;
+  log_printf("game pictures: %s: %s; left out", path, why ? why : "can't read it");
+  return 0;
+}
+
+static void icons_done(void)
+{
+  icons.state = PART_DONE;
+  log_printf("game pictures: %d icons in %u ms over %d frames", __builtin_popcountll(icons_filled),
+             (unsigned)(ticks * 1000 / sys_tick_freq()), frames);
+}
+
+/* the icons not done yet after a pass: tried again later, or given up (then left out) */
+static void icons_later(void)
+{
+  if (!try_later(&icons, ICONS_WHAT, zstd_no_memory)) {
+    icons_lost |= icons_todo;
+    icons_todo = 0;
+  }
+}
+
+/* the next icon still to read from k on, open to read; at the end of the pass, the icons are done (and kept
+ * in the cache), or the ones that ran out of memory are tried again later */
+static void next_icon(int k)
+{
+  task = NOTHING;
+  for (; k < GAMEIMAGES; k++) {
+    uint64_t bit = 1ull << (k - GAMEIMAGES_SHARED);
+    if (!(icons_todo & bit) || (icons_short & bit))
+      continue;
+    int open = open_icon(k);
+    if (open > 0) {
+      icon = k;
+      task = DECODE_ICON;
+      return;
+    }
+    if (open < 0) { /* this one later, the others now */
+      icons_short |= bit;
+      continue;
+    }
+    icons_todo &= ~bit;
+    icons_lost |= bit;
+  }
+  icons_short = 0;
+  if (icons_todo) {
+    icons_later();
+    return;
+  }
+  icons_done();
+  __builtin_memset(&cache.head, 0, sizeof(cache.head));
+  __builtin_memcpy(cache.head.boxes, boxes, sizeof(boxes));
+  cache.head.filled = icons_filled;
+  if (icons_filled && cache_start(CACHE_ICONS, icons_mem, ICONS_STAGING))
+    task = SAVE;
+}
+
+static void start_icons(uint64_t start)
+{
+  if (!icons_atlas()) {
+    icons_later();
+    return;
+  }
+  if (icons_todo == ALL_ICONS && cache_usable(CACHE_ICONS)) { /* none read yet: all of them from the cache */
+    if (!icons_key(start))
+      return; /* the rest of the key next frame */
+    if (cache_open(CACHE_ICONS)) {
+      if (cache.head.size != ICONS_STAGING || cache.head.filled & ~(uint64_t)ALL_ICONS) {
+        cache_drop(CACHE_ICONS, "its icons aren't right");
+      } else {
+        ticks = 0, frames = 0;
+        cache.data = icons_mem;
+        task = READ_ICONS;
+        return;
+      }
+    }
+  }
+  ticks = 0, frames = 0, decoded = 0;
+  next_icon(GAMEIMAGES_SHARED);
+}
+
+/* an icon's file read: into its slot, handed over at once (or left out, or tried again later) */
+static void icon_read(int more, const char *why)
+{
+  uint64_t bit = 1ull << (icon - GAMEIMAGES_SHARED);
+  bool no_memory = (more < 0 && why == zstd_no_memory) || sink_why == zstd_no_memory;
+  if (no_memory) {
+    icons_short |= bit;
+  } else if (more < 0 || !all_here() || !want[icon].gpu.size) {
+    log_printf("game pictures: icon %s: %s; left out", names[icon],
+               more < 0 && why ? why : sink_why ? sink_why : "no picture of that name in it");
+    icons_lost |= bit;
+    icons_todo &= ~bit;
+  } else {
+    icon_finish(icon - GAMEIMAGES_SHARED);
+    gpuui_icon_filled(icon - GAMEIMAGES_SHARED);
+    icons_filled |= bit;
+    icons_todo &= ~bit;
+  }
+  close_all();
+  next_icon(icon + 1);
+}
+
+/* --- each frame -------------------------------------------------------------------------------------- */
+
+bool gameimage_lost(int picture)
+{
+  if (picture < 0 || picture >= GAMEIMAGES)
+    return true;
+  if (picture < GAMEIMAGES_SHARED)
+    return shared.state == PART_LOST || (shared.state == PART_DONE && !want[picture].gpu.size);
+  return icons_lost >> (picture - GAMEIMAGES_SHARED) & 1;
 }
 
 void gameimage_frame(void)
 {
-  if (state == DONE || state == FAILED || !gpuui_ready())
+  if (!gpuui_ready())
     return;
-  const char *why = 0;
-  if (state == IDLE) {
-    state = SHARED;
-    lo = 0, hi = GAMEIMAGES_SHARED;
-    if (fs_open(&file, ARCHIVE, FS_READ) != 0) {
-      fail("can't open it"); /* not menu text */
+  uint64_t start = sys_tick();
+  if (task == NOTHING) {
+    if (gfx_style != GFX_STYLE_GAME)
+      return; /* nothing new in gz's style (what's under way is finished, so its memory is given back) */
+    if (due(&shared))
+      start_shared(); /* first: the controllers and the menus' parts */
+    else if (due(&icons))
+      start_icons(start);
+    if (task == NOTHING)
       return;
-    }
-    file_open = true;
-    stream = zstd_stream_new(read_file, 0, &why);
-    if (!stream) {
-      fail(why);
-      return;
-    }
   }
-  uint64_t start = sys_tick(), limit = sys_tick_freq() * STEP_MS / 1000;
+  const char *why = 0;
   int more = 1;
-  while (more == 1 && sys_tick() - start < limit)
-    more = zstd_stream_step(stream, state == ICONS ? ICON_STEP_BYTES : STEP_BYTES, sink, 0, &why);
+  switch (task) {
+    case READ_SHARED:
+      more = cache_read(CACHE_SHARED, start);
+      break;
+    case READ_ICONS:
+      more = cache_read(CACHE_ICONS, start);
+      break;
+    case SAVE:
+      more = cache_write(start);
+      break;
+    default:
+      while (more == 1 && !time_up(start))
+        more = zstd_stream_step(stream, task == DECODE_ICON ? ICON_STEP_BYTES : STEP_BYTES, sink, 0, &why);
+      break;
+  }
   ticks += sys_tick() - start;
   frames++;
   if (more == 1)
     return;
-  if (state == SHARED) {
-    if (more < 0 || !all_here()) {
-      fail(more < 0 ? why : sink_why ? sink_why : "it ended before the pictures"); /* not menu text */
+  switch (task) {
+    case READ_SHARED:
+      task = NOTHING;
+      if (more < 0) { /* decoded instead, next frame */
+        free(mem);
+        mem = 0;
+        mem_taken = 0;
+        return;
+      }
+      for (int k = 0; k < GAMEIMAGES_SHARED; k++)
+        want[k].gpu = cache.head.images[k];
+      publish_shared();
+      log_printf("game pictures: read from %s in %u ms over %d frames", cache.path,
+                 (unsigned)(ticks * 1000 / sys_tick_freq()), frames);
       return;
-    }
-    close_all();
-    gpu_image_t images[GAMEIMAGES_SHARED];
-    for (int k = 0; k < GAMEIMAGES_SHARED; k++)
-      images[k] = want[k].gpu;
-    gpuui_images_publish(0, 0, mem, mem_size, images, GAMEIMAGES_SHARED);
-    log_printf("game pictures: loaded in %u ms over %d frames", (unsigned)(ticks * 1000 / sys_tick_freq()), frames);
-    if (!(icons_mem = aligned_alloc(PAGE, round_up(ICONS_MEM, PAGE)))) {
-      log_printf("game pictures: no memory for the icons");
-      state = DONE;
+    case DECODE_SHARED:
+      task = NOTHING;
+      if (more < 0 || !all_here()) {
+        shared_failed(more < 0 ? why : sink_why ? sink_why : "it ended before the pictures"); /* not menu text */
+        return;
+      }
+      close_all();
+      publish_shared();
+      log_printf("game pictures: loaded in %u ms over %d frames", (unsigned)(ticks * 1000 / sys_tick_freq()), frames);
+      __builtin_memset(&cache.head, 0, sizeof(cache.head));
+      for (int k = 0; k < GAMEIMAGES_SHARED; k++)
+        cache.head.images[k] = want[k].gpu;
+      if (cache_start(CACHE_SHARED, mem, mem_size))
+        task = SAVE;
       return;
-    }
-    __builtin_memset(icons_mem, 0, round_up(ICONS_MEM, PAGE));
-    gpuui_icons_publish(icons_mem, round_up(ICONS_MEM, PAGE));
-    state = ICONS; /* (parse() and sink() go by it) */
-    if ((icon = next_icon(GAMEIMAGES_SHARED)) >= GAMEIMAGES)
-      state = DONE;
-    return;
-  }
-  /* an icon read: into its slot, handed over at once (or left out) */
-  if (more < 0 || !all_here() || !want[icon].gpu.size) {
-    log_printf("game pictures: icon %s: %s; left out", names[icon],
-               more < 0 && why ? why : sink_why ? sink_why : "no picture of that name in it");
-  } else {
-    icon_finish(icon - GAMEIMAGES_SHARED);
-    gpuui_icon_filled(icon - GAMEIMAGES_SHARED);
-    icons_made++;
-  }
-  close_all();
-  if ((icon = next_icon(icon + 1)) >= GAMEIMAGES) {
-    state = DONE;
-    log_printf("game pictures: %d icons; in all %u ms over %d frames", icons_made,
-               (unsigned)(ticks * 1000 / sys_tick_freq()), frames);
+    case READ_ICONS:
+      task = NOTHING;
+      if (more < 0) { /* decoded instead, next frame: no slot is filled, and the atlas starts clean */
+        __builtin_memset(icons_mem, 0, ICONS_STAGING);
+        return;
+      }
+      __builtin_memcpy(boxes, cache.head.boxes, sizeof(boxes));
+      icons_filled = cache.head.filled;
+      icons_lost = ALL_ICONS & ~icons_filled;
+      icons_todo = 0;
+      for (int slot = 0; slot < ICONS; slot++)
+        if (icons_filled >> slot & 1)
+          gpuui_icon_filled(slot);
+      icons_done();
+      return;
+    case DECODE_ICON:
+      icon_read(more, why);
+      return;
+    default: /* SAVE: done, or it couldn't be (nothing lost but the next start's time) */
+      task = NOTHING;
+      return;
   }
 }

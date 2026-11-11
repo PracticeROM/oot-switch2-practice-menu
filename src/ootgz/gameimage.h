@@ -3,7 +3,7 @@
  * first are in a 244 MB archive (65 MB packed), the icons each in a file of their own (about 13 MB in
  * all), so they're loaded a little each frame, from the first frame they're wanted, and handed to
  * gpuui.c as textures. Nothing of them is in this repository or the release: they're the user's own
- * files. */
+ * files (the cache on the SD card is made from them, on the user's console). */
 #ifndef GAMEIMAGE_H
 #define GAMEIMAGE_H
 
@@ -40,11 +40,14 @@ enum {
  * fractions of the slot: x0, y0, x1, y1 */
 void gameimage_icon_box(int slot, float box[4]);
 
-/* game thread, every frame they're wanted: loads some more (a few milliseconds' worth) until they're
- * all there, or it fails (logged once; the input display keeps its glyphs) */
+/* game thread, every frame: loads some more (a few milliseconds' worth) until they're all there, in the
+ * game's style (in gz's, what's under way is finished, and nothing new started). The first start reads
+ * them from the game's files, later ones from the SD card (sloperinaGZ/cache). What ran out of memory is
+ * tried again later; what can't be had is logged (the input display then keeps its glyphs). */
 void gameimage_frame(void);
 
-/* true once loading them has failed: none of the pictures will come (the menu then leaves no room for them) */
-bool gameimage_failed(void);
+/* true once picture (GAMEIMAGE_* or GAMEPIC_*) can't come: not in this version, or it couldn't be read
+ * (the menu then leaves no room for it) */
+bool gameimage_lost(int picture);
 
 #endif

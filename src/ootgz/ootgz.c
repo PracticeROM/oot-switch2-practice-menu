@@ -374,8 +374,7 @@ static void frame(void)
   cheats_frame();
   pouch_frame();
   job_frame();
-  if (gfx_style == GFX_STYLE_GAME)
-    gameimage_frame(); /* the game's pictures (its controllers, its menus' parts), a little each frame */
+  gameimage_frame(); /* the game's pictures (its controllers, its menus' parts), a little each frame */
   settings_frame(menu_current != 0);
   settings_log_frame();
   fa_frame(); /* last: the frame's work is done before the game is held */

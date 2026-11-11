@@ -101,6 +101,14 @@ Read with [KillzXGaming/ShaderLibrary](https://github.com/KillzXGaming/ShaderLib
   a texture times them). `gpuui.c` draws with them in nvn.c's present hook: quads, glyphs from an atlas, shapes
   painted once into the atlas, and the game's pictures as textures from their packaged data. The interface it found
   is at the top of `gpuui.c`.
+  - Each quad is its own draw (its element is bound for it), so the count of quads is the count of draws. A run of
+    text is one quad a character: the atlas is RG8 (a luminance and a coverage), and `gpuui_glyph_shadowed` bakes a
+    glyph's shadow into its image (luminance 0 where only the shadow shows), where a glyph and its shadow drawn
+    apart were two. **Not yet checked in game** (written without a console or an emulator to hand): the RG8 atlas
+    and its swizzle are the part to look at first if text is missing or the wrong colour.
+  - A frame has room for some 4000 quads. `nvn.c` keeps 2000 of them back for the panels while the air walls and
+    the enemies' health are drawn under them (`gpuui_reserve`), and `overlayui.c` shares the rest out (the bars
+    first, then the lines, their glows last), so a busy scene can't cost the menu its text.
 - `nativeui.c` lays the panels out. The menu by what its rows are (`gfx_row`):
   - text set with its capitals centred in its row, as the game sets a button's (descenders hang below), and
     checkboxes, chevrons and glyphs on that middle;

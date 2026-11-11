@@ -25,6 +25,12 @@ bool gpuui_ready(void);
  * the GPU is done with the frames in flight, whose copies read the atlas's staging rows */
 bool gpuui_atlas_resetting(void);
 void gpuui_begin(nvn_texture_t *target, nvn_rect_t area, int texture_height, bool origin_lower_left, int slot);
+/* A frame has room for some 4000 quads, and what's drawn first could take them all. So: n quads are kept
+ * back from those made from now on, for what's drawn after (0: none; a frame begins with none). nvn.c keeps
+ * the panels' share back while the overlays under them are drawn, so a busy scene can't cost the menu its
+ * text. And the quads that can still be made now, short of the reserve */
+void gpuui_reserve(int n);
+int gpuui_quads_free(void);
 /* a w x h rectangle at (x, y); corners: (left, top), (right, top), (left, bottom), (right, bottom) */
 void gpuui_rect(float x, float y, float w, float h, const gpu_colour_t corners[4]);
 /* the quads made from now on (until it's set again, or the frame's end): scaled by s about (ox, oy) */
@@ -50,6 +56,11 @@ void gpuui_line(float x0, float y0, float x1, float y1, float width, gpu_colour_
 void gpuui_line_depth(float x0, float y0, float d0, float x1, float y1, float d1, float width, gpu_colour_t colour);
 /* a glyph with its pen at x and baseline at y; returns its advance in pixels (0 if it has none) */
 float gpuui_glyph(gf_face_t face, int em, uint32_t codepoint, float x, float baseline, gpu_colour_t colour);
+/* the same with its shadow under it, in one quad: the glyph again in black at GPUUI_SHADOW_ALPHA, right and
+ * down by a whole number of pixels that grows with em (at least 1), baked into the glyph's image in the atlas.
+ * For runs of text: half the quads (and draws) of a glyph and a shadow drawn apart */
+#define GPUUI_SHADOW_ALPHA 0.55f
+float gpuui_glyph_shadowed(gf_face_t face, int em, uint32_t codepoint, float x, float baseline, gpu_colour_t colour);
 /* a shape of the caller's: a w x h coverage image (0..255 per pixel, rows `stride` apart) painted once by
  * paint(..., arg) and kept in the atlas under (id, w, h) (so arg must give the same image each time),
  * drawn at (x, y) in colour */

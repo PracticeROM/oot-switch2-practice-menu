@@ -1460,6 +1460,11 @@ typedef struct {
   nvn_region_t readback_region;
 } panel_draw_t;
 
+/* The frame's quads kept for the panels while the air walls and the enemies' health are drawn (gpuui_reserve):
+ * a full menu is some 1000 (a quad a character, and its box and cursor), and twice that for the moment one
+ * menu fades out as the next comes in. The overlays keep the rest, about as many. */
+#define PANEL_QUADS 2000
+
 /* settings > menu > size: auto, 2x, 2.5x, 3x */
 #define MENU_SIZES 4
 
@@ -1749,7 +1754,11 @@ static void draw_overlay(nvn_queue_t *queue, nvn_window_t *window, int index)
   }
   /* the air walls and the enemies' health: on the GPU in the game's style (under the panels), else as
    * cleared rectangles below */
+  if (gpu && screen) /* the panels are drawn after them, over them: their share of the frame's quads is kept */
+    gpuui_reserve(PANEL_QUADS);
   int overlays = gpu ? overlayui_draw(frame.area.w, frame.area.h, pause_icon) : 0;
+  if (gpu)
+    gpuui_reserve(0);
   if (overlays)
     gpu_panels++;
 

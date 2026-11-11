@@ -59,6 +59,33 @@ field name (`gamedata.murmur3`). "The patch" is ootmenu's code patch (`patch.py`
   separate fields named `Struct.Member`.
 - **BoolExp** fields are formulas the game evaluates (e.g. "quest at or past stage X"); they can't be written.
 - **Enum** values are hashes of choice names; the choices are in `data/gamedata_fields.json` (`"v"`).
+- A Struct's `DefaultValue` maps each member's hash (`murmur3("Member")`) to the member field's
+  (`murmur3("Struct.Member")`): `DungeonInfo.DodongoCavern.IsGetCompass` is an ordinary Bool in the save.
+
+### Bool64bitKey: flags keyed by a placed actor
+- The `Bool64bitKey` fields (11,657 in `GameDataList.Product.110`) are keyed by a **u64**, not a name hash. 3,686
+  of the keys are the instance `Hash` of an actor placed in the layouts (`romfs/Banc/...bcett`); most of the others
+  are such a `Hash ^ 2`. What the `^ 2` flag means isn't known (both are set for every collected Gold Skulltula).
+  They record what a placed actor did once: each Gold Skulltula, Heart Container and free-standing Piece of Heart
+  (§5.22). Opened chests are not among them: those are the Bool `IsTreasureBoxOpen.<chest Hash in decimal>`.
+- **In memory (1.1.1):** the manager's type entries are `manager+0x8 + type * 0x60` for the 32 basic types (Int
+  `+0xC8`, String64 `+0x608`), then `+0xC08` (Struct, 0x20-byte records), `+0xC30`, and **`+0xC58` Bool64bitKey**:
+  u32 count at `+0xC58`, records at `[+0xC60]`, sorted by key, 16 bytes each: `+0x0` u64 key, `+0x8` u32
+  ResetTypeValue, **`+0xC` u8 value**, `+0xD` u8 SaveFileIndex, `+0xE` unknown, `+0xF` u8 ExtraByte.
+  - The loader `main+0x5AE6B0` (called from `main+0xDFFA84` with `x0 = manager+0xC58`) reads `Hash`,
+    `ResetTypeValue`, `SaveFileIndex` and `ExtraByte` from the field list into them.
+  - The game's Gold Skulltula count (loop at `main+0x57A1E8`) takes `*(*(main+0x4C7E180))`, binary-searches the
+    records (`[mgr+0xC58]`, `[mgr+0xC60]`) for each of 100 keys at `main+0x3F0B230` and counts `value == 1`.
+  - `gamedata.c` `gd_get_bool64` reads them the same way (read only). Writing wasn't studied (`+0x10` / `+0x18` of
+    the entry might be a queue of pending writes; a guess).
+  - **Not verified:** 1.0.0. If the entry at `+0xC58` doesn't hold a known Gold Skulltula key, the module looks for
+    one in `manager+0xC08` to `+0xD08`. Whether 1.0.0's layouts have the same instance ids isn't known either.
+- **In `progress.sav`:** the Bool64bitKey group (type index 32) holds one pair, `(0xA3DB7114, file offset)`. The
+  offset points at a sorted u64 array of the keys that are set, ended by a 0 key (445 keys in one slot). The u32 at
+  header `+8` is where the `(hash, value)` table ends; reading pairs past it gives ~620 "unknown hashes" that are
+  really this data.
+- `IsGoldSkullDead` (0xAD201C8E) is a Struct of 100 Bools that are never saved (reset 0x19, save index -1), so it
+  isn't the collection record.
 
 ### Saved or not, and what resets a field
 - Every field object starts with the same header: `+0x00` its type's vtable, `+0x08` reset bits (u32), `+0x0C` a

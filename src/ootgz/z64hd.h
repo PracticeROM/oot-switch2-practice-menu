@@ -102,6 +102,7 @@ extern uintptr_t z64hd_main;
 #define Z64HD_GD_INT_TYPE       0xC8        /* manager+: the Int type entry (see gamedata.h) */
 #define Z64HD_GD_TYPES_SCAN     0x800       /* other type entries are found by vtable within manager+0..this */
 #define Z64HD_GD_STRING_TYPE    0x608       /* manager+: the String64 type entry */
+#define Z64HD_GD_BOOL64_TYPE    0xC58       /* manager+: the Bool64bitKey flags (1.1.1; see gamedata.c) */
 #define Z64HD_STR_STRIDE        0x108
 #define Z64HD_STR_VALUE         0x68        /* char *value, followed by u32 capacity */
 #define Z64HD_UI_REFRESH        (0x310 / 8) /* vtable slot 98: "refresh contents" */

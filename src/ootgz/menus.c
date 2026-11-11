@@ -966,6 +966,23 @@ static void set_defense(menu_item_t *it, bool on)
   upgrade_set(UPG_DEFENSE, on);
 }
 
+/* The Great Fairy of Power's stronger spin attack. Her event gives no item (the other fairies give an
+ * Item_FairyBless_*): it plays its spin attack tutorial, and the only thing it leaves in the save is that it
+ * was played, which is what the game asks before she grants it again. So this is that flag. */
+#define HASH_SPIN_ATTACK_UPGRADE 0x8FA2608Eu /* HavePlayedEvent.Dm_FairyFountain_Power */
+
+static bool get_spin_attack(menu_item_t *it)
+{
+  bool on = false;
+  gd_get_bool(HASH_SPIN_ATTACK_UPGRADE, &on);
+  return on;
+}
+
+static void set_spin_attack(menu_item_t *it, bool on)
+{
+  gd_set_bool(HASH_SPIN_ATTACK_UPGRADE, on);
+}
+
 /* it->data: the bottle (data_bottles); choice 0 is "none", then data_bottle_names */
 static const char *bottle_choices[MAX_CHOICES];
 /* each choice's picture, as the bottle's own (choice_pictures): "none" shows the empty bottle */
@@ -1213,7 +1230,7 @@ static void add_upgrade(menu_t *menu, const char *label, upgrade_t upgrade)
 
 static void build_collection(void)
 {
-  menu_init(&m_collection, "collection", 21);
+  menu_init(&m_collection, "collection", 22);
   /* quest items, strength, upgrades (the scale, the bags' and wallet's sizes), the great fairies' upgrades, then
    * the tokens */
   menu_add_heading(&m_collection, "quest rewards");
@@ -1229,6 +1246,9 @@ static void build_collection(void)
     add_upgrade(&m_collection, upgrades[upgrade].name, upgrade);
   menu_add_heading(&m_collection, "fairy upgrades");
   menu_add_check(&m_collection, "double defense", get_defense, set_defense, 0);
+  menu_item_t *spin = menu_add_check(&m_collection, "spin attack", get_spin_attack, set_spin_attack, 0);
+  if (spin)
+    spin->hint = "the great fairy of power's: a stronger spin attack";
   menu_add_submenu(&m_collection, "magic", &m_magic);
   menu_add_heading(&m_collection, "collectibles");
   menu_item_t *skulltulas = menu_add_number(&m_collection, "skulltulas", get_number, set_skulltulas, max_from_data2,
@@ -1808,32 +1828,45 @@ static void watch_press(menu_item_t *it, int part)
   }
 }
 
-/* gz's arrows over the list (as in debug > memory) when there are more watches than WATCH_ROWS */
-static void watch_arrows(menu_item_t *it, char *buf, int len)
+/* gz's arrows when there are more watches than WATCH_ROWS: up over the list (with which of them show), down
+ * under it. it->data: -1 up, 1 down */
+static void watch_arrow(menu_item_t *it, char *buf, int len)
 {
   int last = watch_top + WATCH_ROWS < watch_count ? watch_top + WATCH_ROWS : watch_count;
-  snprintf(buf, len, "%c %c  %d-%d / %d", GFX_ICON_UP, GFX_ICON_DOWN, watch_top + 1, last, watch_count);
+  if (it->data < 0)
+    snprintf(buf, len, "%c  %d-%d / %d", GFX_ICON_UP, watch_top + 1, last, watch_count);
+  else
+    snprintf(buf, len, "%c", GFX_ICON_DOWN);
 }
 
-/* part 0 the up arrow, 1 the down arrow */
-static bool arrows_cursor(menu_item_t *it, const char *line, int *start, int *len)
+/* the cursor on the arrow only */
+static bool arrow_cursor(menu_item_t *it, const char *line, int *start, int *len)
 {
-  *start = it->part ? 2 : 0;
+  *start = 0;
   *len = 1;
   return true;
 }
 
 static void watch_scroll(menu_item_t *it, int part)
 {
-  int top = clamp_int(watch_top + (part ? 1 : -1), 0, max_top(watch_count, WATCH_ROWS));
+  int top = clamp_int(watch_top + (int)it->data, 0, max_top(watch_count, WATCH_ROWS));
   if (top != watch_top) {
     watch_top = top;
     watches_built = ~0u; /* the rows show other watches: rebuilt */
   }
 }
 
-static const char *const watch_arrow_hints[] = { "L: scroll the list up (held: keeps going)",
-                                                 "L: scroll the list down (held: keeps going)" };
+static void add_watch_arrow(int dir)
+{
+  menu_item_t *arrow = menu_add_action(&m_watches, "", 0, dir);
+  if (!arrow)
+    return;
+  arrow->text = watch_arrow;
+  arrow->cursor = arrow_cursor;
+  arrow->press = watch_scroll;
+  arrow->press_repeat = true;
+  arrow->hint = dir < 0 ? "L: scroll the list up (held: keeps going)" : "L: scroll the list down (held: keeps going)";
+}
 
 /* --- watches: adding them -------------------------------------------------------------------------- */
 
@@ -1956,11 +1989,6 @@ static void add_watches_box_items(void)
 {
   menu_add_check(&m_watches, "show on screen", get_shown, set_shown, 0);
   menu_add_heading(&m_watches, "watches box");
-  menu_item_t *header = menu_add_check(&m_watches, "header", get_header, set_header, 0);
-  if (header) {
-    header->hint = "a small \"watches\" header over them, underlined";
-    header->log_label = "watches header";
-  }
   menu_add_option(&m_watches, "position", GFX_NPLACES, watches_corner_names, get_corner, set_corner, 0);
   menu_item_t *move = menu_add_action(&m_watches, "move watches position", act_move_panel, MOVE_WATCHES);
   if (move) {
@@ -1971,21 +1999,13 @@ static void add_watches_box_items(void)
   }
 }
 
-/* the scroll arrows (if needed) and a row for each watch in the window */
+/* a row for each watch in the window, between the scroll arrows (if needed), with a scroll bar beside them */
 static void add_watch_rows(void)
 {
   watch_top = clamp_int(watch_top, 0, max_top(watch_count, WATCH_ROWS));
-  if (watch_count > WATCH_ROWS) {
-    menu_item_t *arrows = menu_add_action(&m_watches, "", 0, 0);
-    if (arrows) {
-      arrows->text = watch_arrows;
-      arrows->cursor = arrows_cursor;
-      arrows->press = watch_scroll;
-      arrows->press_repeat = true;
-      arrows->n_parts = 2;
-      arrows->part_hints = watch_arrow_hints;
-    }
-  }
+  bool scrolls = watch_count > WATCH_ROWS;
+  if (scrolls)
+    add_watch_arrow(-1);
   watch_first_row = m_watches.n_items;
   for (int i = watch_top; i < watch_count && i < watch_top + WATCH_ROWS; i++) {
     menu_item_t *row = menu_add_action(&m_watches, "", 0, i);
@@ -2001,6 +2021,14 @@ static void add_watch_rows(void)
     row->press = watch_press;
     row->n_parts = row_parts(&watch_list[i], parts);
     row->hint = "d-left/right: pick a button   L: press it";
+  }
+  m_watches.inner_rows = 0;
+  if (scrolls) {
+    m_watches.inner_first = watch_first_row;
+    m_watches.inner_rows = m_watches.n_items - watch_first_row;
+    m_watches.inner_items = watch_count;
+    m_watches.inner_top = watch_top;
+    add_watch_arrow(1);
   }
 }
 
@@ -2064,7 +2092,7 @@ void watches_sync(void)
 
 static void build_watches(void)
 {
-  menu_init(&m_watches, "watches", WATCH_ROWS + 19);
+  menu_init(&m_watches, "watches", WATCH_ROWS + 19);  /* the watches, their 2 arrows, the rest */
   fill_watches();
   menu_init(&m_watch_add, "known watches", W_COUNT + 1);
   m_watch_add.parent = &m_watches; /* opened from the folder button */
@@ -2567,7 +2595,7 @@ static void build_levitate(void)
 
 static void build_settings(void)
 {
-  menu_init(&m_settings, "settings", 12);
+  menu_init(&m_settings, "settings", 13);
   menu_add_heading(&m_settings, "menu settings");
   menu_item_t *language = menu_add_option(&m_settings, "language", 1, lang_names(), get_lang, set_lang, 0);
   if (language)
@@ -2586,6 +2614,11 @@ static void build_settings(void)
                                      set_hide_in_game_menus, 0);
   if (hide)
     hide->hint = "no watches, input display or log over the game's pause screen and map";
+  menu_item_t *header = menu_add_check(&m_settings, "watch box header", get_header, set_header, 0);
+  if (header) {
+    header->hint = "a small \"watches\" header over the watches box, underlined";
+    header->log_label = "watch box header";
+  }
   menu_end_group(&m_settings);
   menu_add_heading(&m_settings, "other settings");
   menu_add_submenu(&m_settings, "input display", &m_input_display);
@@ -2601,7 +2634,7 @@ static void build_settings(void)
 
 /* --- debug (gz's debug menu) ----------------------------------------------------------------------- */
 
-static menu_t m_debug;
+static menu_t m_debug, m_tests;
 
 /* debug > heap: gz shows its game's arena; here, what the console says of the game's memory
  * (svcGetInfo) and how much of the heap region is mapped (svcQueryMemory, refreshed every second). */
@@ -2798,19 +2831,28 @@ static void act_dive_test(menu_item_t *it)
 static void build_debug(void)
 {
   build_pause_research();
-  menu_init(&m_debug, "debug", 6);
-  menu_item_t *dive = menu_add_action(&m_debug, "dive test: heights", act_dive_test, DIVETEST_HEIGHTS);
-  if (dive)
-    dive->hint = "Link swimming at the surface: drops him 1 to 192 up, twice each, and logs how deep he goes "
-                 "(L again: stop)";
-  menu_item_t *moving = menu_add_action(&m_debug, "dive test: moving", act_dive_test, DIVETEST_MOVING);
-  if (moving)
-    moving->hint = "as the heights test, from 16 and 96 up, moving 0 to 13.6 u/s the way he faces (face open water)";
+  menu_init(&m_debug, "debug", 5);
+  menu_add_submenu(&m_debug, "tests", &m_tests);
   menu_add_submenu(&m_debug, "heap", &m_heap);
   menu_add_submenu(&m_debug, "memory", &memview_menu);
   menu_add_submenu(&m_debug, "pause research", &m_pause_research);
   menu_add_return(&m_debug);
   memview_build(&m_watches);
+
+  menu_init(&m_tests, "tests", 4);
+  menu_add_heading(&m_tests, "dive tests");
+  menu_item_t *dive = menu_add_action(&m_tests, "from heights", act_dive_test, DIVETEST_HEIGHTS);
+  if (dive) {
+    dive->hint = "Link swimming at the surface: drops him 1 to 192 up, twice each, and logs how deep he goes "
+                 "(L again: stop)";
+    dive->log_label = "dive test from heights";
+  }
+  menu_item_t *moving = menu_add_action(&m_tests, "while moving", act_dive_test, DIVETEST_MOVING);
+  if (moving) {
+    moving->hint = "as from heights, from 16 and 96 up, moving 0 to 13.6 u/s the way he faces (face open water)";
+    moving->log_label = "dive test while moving";
+  }
+  menu_add_return(&m_tests);
 
   menu_init(&m_heap, "heap", 7);
   menu_item_t *view = menu_add_action(&m_heap, "view the heap in memory", act_heap_memory, 0);
@@ -2827,8 +2869,9 @@ static void build_debug(void)
 static menu_t m_log;
 
 /* The log menu: the module's last LOG_LINES messages, newest first, filtered by type (the word(s)
- * before a message's ':', e.g. "warp", "settings"; or "problems") and scrolled with gz's arrows. */
-#define LOG_ROWS 12
+ * before a message's ':', e.g. "warp", "settings"; or "problems") and scrolled with gz's arrows, up over them
+ * and down under them, with a scroll bar beside them (as the watches). */
+#define LOG_ROWS 5 /* messages shown at once; the arrows scroll the rest */
 #define MAX_LOG_TYPES 24
 #define LOG_TYPE_SIZE 20
 #define LOG_TYPE_MAX_LEN 18 /* a ':' further in isn't after a type */
@@ -2951,30 +2994,54 @@ static void set_log_filter(menu_item_t *it, int filter)
   log_top = 0;
 }
 
-static void log_arrows(menu_item_t *it, char *buf, int len)
+/* the window on the matching messages kept in range, and the scroll bar beside it told where it is; returns how
+ * many match */
+static int log_window(void)
 {
   int count = log_count();
-  int max = max_top(count, LOG_ROWS);
-  if (log_top > max)
-    log_top = max;
+  log_top = clamp_int(log_top, 0, max_top(count, LOG_ROWS));
+  m_log.inner_items = count > LOG_ROWS ? count : LOG_ROWS;
+  m_log.inner_top = log_top;
+  return count;
+}
+
+/* it->data: -1 the up arrow (with which messages show), 1 the down arrow */
+static void log_arrow(menu_item_t *it, char *buf, int len)
+{
+  int count = log_window();
   int last = log_top + LOG_ROWS < count ? log_top + LOG_ROWS : count;
-  snprintf(buf, len, "%c %c  %d-%d / %d", GFX_ICON_UP, GFX_ICON_DOWN, count ? log_top + 1 : 0, last, count);
+  if (it->data < 0)
+    snprintf(buf, len, "%c  %d-%d / %d", GFX_ICON_UP, count ? log_top + 1 : 0, last, count);
+  else
+    snprintf(buf, len, "%c", GFX_ICON_DOWN);
 }
 
 static void log_scroll(menu_item_t *it, int part)
 {
-  int max = max_top(log_count(), LOG_ROWS);
-  log_top = clamp_int(log_top + (part ? 1 : -1), 0, max);
+  log_top = clamp_int(log_top + (int)it->data, 0, max_top(log_count(), LOG_ROWS));
+  log_window();
 }
 
-static const char *const log_arrow_hints[] = { "L: scroll to newer (held: keeps going)",
-                                               "L: scroll to older (held: keeps going)" };
+static void add_log_arrow(int dir)
+{
+  menu_item_t *arrow = menu_add_action(&m_log, "", 0, dir);
+  if (!arrow)
+    return;
+  arrow->text = log_arrow;
+  arrow->cursor = arrow_cursor;
+  arrow->press = log_scroll;
+  arrow->press_repeat = true;
+  arrow->indent = 1; /* as the messages, the scroll bar left of them */
+  arrow->hint = dir < 0 ? "L: scroll to newer (held: keeps going)" : "L: scroll to older (held: keeps going)";
+}
 
 /* it->data: the row */
 /* a log message, cut at a word with "..." when it's longer than a row holds */
-#define LOG_LINE_W (GFX_COLS - 2) /* menu.c's ITEM_COL */
+#define LOG_LINE_W (GFX_COLS - 4) /* menu.c's ITEM_COL, and the messages' indent */
 static void text_log(menu_item_t *it, char *buf, int len)
 {
+  if (it->data == 0)
+    log_window();
   const char *message = log_nth(log_top + (int)it->data, 0);
   snprintf(buf, len, "%s", message ? message : "");
   int n = (int)strlen(buf);
@@ -2990,23 +3057,21 @@ static void text_log(menu_item_t *it, char *buf, int len)
 
 static void build_log(void)
 {
-  menu_init(&m_log, "log", LOG_ROWS + 5);
-  /* the filter on the heading's line: "log history  < all >" */
-  menu_item_t *filter =
-    menu_add_option(&m_log, "log history", 1, log_type_names, get_log_filter, set_log_filter, 0);
+  menu_init(&m_log, "log", LOG_ROWS + 6);
+  menu_add_heading(&m_log, "log history");
+  menu_item_t *filter = menu_add_option(&m_log, "filter", 1, log_type_names, get_log_filter, set_log_filter, 0);
   if (filter)
     filter->log_label = ""; /* the list shows the filter: no log message for it */
-  menu_item_t *arrows = menu_add_action(&m_log, "", 0, 0);
-  if (arrows) {
-    arrows->text = log_arrows;
-    arrows->cursor = arrows_cursor;
-    arrows->press = log_scroll;
-    arrows->press_repeat = true;
-    arrows->n_parts = 2;
-    arrows->part_hints = log_arrow_hints;
+  add_log_arrow(-1);
+  m_log.inner_first = m_log.n_items;
+  for (int row = 0; row < LOG_ROWS; row++) {
+    menu_item_t *line = menu_add_text(&m_log, text_log, row); /* grey: they can't be selected */
+    if (line)
+      line->indent = 1; /* room for the scroll bar left of them */
   }
-  for (int row = 0; row < LOG_ROWS; row++)
-    menu_add_text(&m_log, text_log, row); /* grey: they can't be selected */
+  m_log.inner_rows = m_log.n_items - m_log.inner_first;
+  m_log.inner_items = LOG_ROWS;
+  add_log_arrow(1);
   menu_add_return(&m_log);
 }
 
@@ -3036,7 +3101,9 @@ static void build_about(void)
   static char title[64];
   snprintf(title, sizeof(title), "sloperinaGZ - %s", BUILD_VERSION);
   menu_add_heading(&m_about, title);
-  menu_add_text(&m_about, text_build_date, 0);
+  menu_item_t *date = menu_add_text(&m_about, text_build_date, 0);
+  if (date)
+    date->indent = 0; /* in line with the heading, not under it */
   menu_end_group(&m_about);
   add_blank_line(&m_about);
   menu_add_text(&m_about, text_static, (intptr_t) "practicerom.com/oothd");

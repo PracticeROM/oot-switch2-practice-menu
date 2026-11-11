@@ -35,7 +35,7 @@ static const char *volatile later_notice;
 
 volatile bool gfx_on_screen;
 volatile int gfx_menu_rows = GFX_ROWS;
-volatile int gfx_opacity = 60;
+volatile int gfx_opacity = 100;
 volatile int gfx_menu_scale;
 volatile int gfx_style = GFX_STYLE_GAME;
 volatile int gfx_custom_x[GFX_PANELS] = { -1, -1, -1, -1 }, gfx_custom_y[GFX_PANELS] = { -1, -1, -1, -1 };
@@ -71,10 +71,12 @@ void gfx_row(int row, int kind)
     menu_panel.kind[row] = (uint8_t)kind;
 }
 
-void gfx_row_reserve(int row, int digits)
+void gfx_row_value(int row, const char *shown, const char *widest)
 {
-  if (row >= 0 && row < GFX_ROWS)
-    menu_panel.reserve[row] = (uint8_t)(digits < 0 ? 0 : digits > 255 ? 255 : digits);
+  if (row < 0 || row >= GFX_ROWS)
+    return;
+  snprintf(menu_panel.value_shown[row], GFX_VALUE_LEN, "%s", shown);
+  snprintf(menu_panel.value_widest[row], GFX_VALUE_LEN, "%s", widest);
 }
 
 void gfx_hint(const char *s)
@@ -88,6 +90,14 @@ void gfx_scroll(int row, int rows, int items, int top)
   menu_panel.scroll_rows = (uint8_t)rows;
   menu_panel.scroll_items = (uint16_t)items;
   menu_panel.scroll_top = (uint16_t)top;
+}
+
+void gfx_inner_scroll(int row, int rows, int items, int top)
+{
+  menu_panel.inner_row = (uint8_t)row;
+  menu_panel.inner_rows = (uint8_t)rows;
+  menu_panel.inner_items = (uint16_t)items;
+  menu_panel.inner_top = (uint16_t)top;
 }
 
 void gfx_end(void) {}
@@ -407,12 +417,19 @@ static void measure_panel(gfx_panel_t *panel)
       }
       hash = hash_mix(hash, (uint8_t)panel->ch[r][c] ^ (uint32_t)panel->style[r][c] << 8);
     }
-  for (int r = 0; r < GFX_ROWS; r++)
-    hash = hash_mix(hash, panel->kind[r] ^ (uint32_t)panel->reserve[r] << 8);
+  for (int r = 0; r < GFX_ROWS; r++) {
+    hash = hash_mix(hash, panel->kind[r]);
+    for (const char *v = panel->value_shown[r]; *v; v++)
+      hash = hash_mix(hash, (uint8_t)*v);
+    for (const char *v = panel->value_widest[r]; *v; v++)
+      hash = hash_mix(hash, (uint8_t)*v ^ 0x100u);
+  }
   for (const char *h = panel->hint; *h; h++)
     hash = hash_mix(hash, (uint8_t)*h);
   hash = hash_mix(hash, (uint32_t)panel->scroll_row << 24 ^ (uint32_t)panel->scroll_rows << 16 ^ panel->scroll_top);
   hash = hash_mix(hash, panel->scroll_items);
+  hash = hash_mix(hash, (uint32_t)panel->inner_row << 24 ^ (uint32_t)panel->inner_rows << 16 ^ panel->inner_top);
+  hash = hash_mix(hash, panel->inner_items);
   panel->hash = hash ? hash : 1;
 }
 

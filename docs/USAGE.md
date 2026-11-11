@@ -154,6 +154,6 @@ the SD card in `sloperinaGZ/settings.ini`, plain text you can edit. Your game sa
 - **"settings won't be kept".** The game couldn't open the SD card; everything works, it just won't remember your
   settings.
 
-Still stuck? The **log** menu (on the main menu) lists what sloperinaGZ did and what went wrong (set **type** to
+Still stuck? The **log** menu (on the main menu) lists what sloperinaGZ did and what went wrong (set **filter** to
 **problems**), and everything is also saved to `sloperinaGZ/log.txt` on the SD card: send that file with any
 problem report. The [manual](MANUAL.md) explains every option.

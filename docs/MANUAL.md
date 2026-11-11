@@ -148,7 +148,7 @@ maximum, see **watches > lock jump height**.)
 | **items** | **child items** (deku sticks, boomerang, fairy slingshot, magic beans, child trade item), **adult items** (fairy bow, megaton hammer, fire / ice / light arrow, the **hookshot** switch: none / hookshot / longshot, adult trade item), **universal** (bombs, bombchus, deku nuts, Din's fire, Farore's wind, Nayru's love, ocarina, bottles A to E, business scrub seed). |
 | **ammo** | How much of each kind of ammo you carry, up to your bag's size. **L** fills it. |
 | **equipment items** | **swords** (kokiri, master, and the **big sword** switch: none / giant's knife / broken giant's knife / biggoron's sword), **shields** (kokiri, hylian, mirror), **tunics** (goron, zora), **boots** (iron, hover), **other** (lenses of truth, echo gem, **mask slot**: one of the mask shop's masks at a time, **amiibo mask**: none / fairy-kid mask / princess mask, the masks Link's and Zelda's amiibo give; in the game's style each shows the chosen mask's picture). |
-| **collection** | **quest rewards** (fairy ocarina, ocarina of time, gerudo card); **strength upgrades** (goron's bracelet, **gauntlets**: none / silver / gold); **capacity upgrades** (**scale**, and the size of each bag and the wallet: deku stick bag, deku nut bag, deku seed bag, bomb bag, quiver, wallet); **fairy upgrades** (double defense, **magic**: your magic and the meter); **collectibles** (**skulltulas**: the tokens' count, and they show in the collection screen). |
+| **collection** | **quest rewards** (fairy ocarina, ocarina of time, gerudo card); **strength upgrades** (goron's bracelet, **gauntlets**: none / silver / gold); **capacity upgrades** (**scale**, and the size of each bag and the wallet: deku stick bag, deku nut bag, deku seed bag, bomb bag, quiver, wallet); **fairy upgrades** (double defense, **spin attack**: the Great Fairy of Power's stronger spin attack, set as her fountain's event having been seen, **magic**: your magic and the meter); **collectibles** (**skulltulas**: the tokens' count, and they show in the collection screen). |
 | **quest items** | **spiritual stones** and **medallions**. |
 | **songs** | **normal songs** and **warp songs**. |
 | **dungeon items** | Per dungeon: map, compass, boss key, and **small keys** where it has them. |
@@ -175,10 +175,10 @@ gz's watch list: values shown on the screen in a box while you play.
 |---|---|
 | **show on screen** | Show the watches box (also **R + D-pad right** in the game). |
 | **watches box > position** | Top-left, top-right, bottom-left, bottom-right, top-centre, bottom-centre, or **custom**. |
-| **watches box > header** | A small **watches** header over them, underlined (on to begin with). |
 | **watches box > move watches position** | Move the box anywhere: the D-pad glides it (hold to speed up), **L** leaves it there. It's shown while you move it, and so is the input display if it's on. |
 
-**watches**: your list, five at a time (the **↑ ↓** buttons above it scroll when there are more). Each watch is a
+**watches**: your list, five at a time. With more, **↑** above it and **↓** below it scroll the list (hold **L** to keep
+going), and in the game's style a scroll bar beside it shows where you are. Each watch is a
 row of buttons:
 
 | Button | Does |
@@ -235,9 +235,9 @@ in-game; test normal jumps, sidehops, jumpslashes, scene changes, and restarts o
 
 ### 2.9 Debug
 
-**dive test: heights** and **dive test: moving** measure how deep Link goes into water by how he falls in. Start
-one with Link swimming at the surface (facing open water for the moving test) and leave the controls alone: it
-measures the surface, drops him again and again from set heights (heights: 1 to 192 above the surface; moving:
+**tests > dive tests**: **from heights** and **while moving** measure how deep Link goes into water by how he falls in. Start
+one with Link swimming at the surface (facing open water for **while moving**) and leave the controls alone: it
+measures the surface, drops him again and again from set heights (from heights: 1 to 192 above the surface; while moving:
 16 and 96 above it, 0 to 13.6 units/s the way he faces), twice each, and writes each drop's fall time, speed
 going in, and deepest point to `log.txt` ("dive test: ..."). Choose it again to stop.
 
@@ -266,9 +266,11 @@ The game's own pause state, for development: values you can watch, change and lo
 ### 2.10 Settings
 
 **menu settings**: **language** ([6](#6-languages)), **size** (auto, small 2x, medium 2.5x, large 3x: the menu, watches
-and log), **background opacity** (0 to 100%, 60% at first; below 100% the game shows through, slightly behind) and
+and log), **background opacity** (0 to 100%, 100% at first; below 100% the game shows through, slightly behind) and
 **hide in game menus** (on at first): no watches, input display or log while the game's pause screen (Plus) or map
 (Minus) is open, so they don't cover it. They show again when it closes, and while this menu is open (to move them).
+
+**watch box header** (on at first): a small **watches** header over the watches box, underlined.
 
 **other settings**: the **input display**, **levitate** and **frame advance** menus below.
 
@@ -325,11 +327,12 @@ pause behavior have not been separately fixed.
 
 ### 2.11 Log
 
-The last 128 messages sloperinaGZ wrote, newest first, 12 at a time (**↑ ↓** scroll).
+Under **log history**: the last 128 messages sloperinaGZ wrote, newest first, five at a time. **↑** above them and
+**↓** below them scroll (hold **L** to keep going), and in the game's style a scroll bar beside them shows where you are.
 
 | Item | What it does |
 |---|---|
-| **log history** `< all >` | Which messages: **all**, only **problems** (anything that couldn't be done), or one kind (warp, settings, notice... whatever kinds there are). |
+| **filter** `< all >` | Which messages: **all**, only **problems** (anything that couldn't be done), or one kind (warp, settings, notice... whatever kinds there are). |
 
 Everything is also written to **`sloperinaGZ/log.txt`** on the SD card (on an emulator, its virtual SD card;
 Lichii build 150+: `%APPDATA%\lichii\sdmc\sloperinaGZ\log.txt`; Fritchii v5.8+: `%APPDATA%\fritchii\sdmc\sloperinaGZ\log.txt`; Eden and older Lichii / Fritchii: `%APPDATA%\eden\sdmc\sloperinaGZ\log.txt`), with the time since the game started, about once a

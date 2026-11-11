@@ -75,6 +75,9 @@ struct menu {
   bool grouping; /* items added now go under the last heading */
   bool scroll_text; /* a page of text: d-up/down scroll it, L presses the selected item (return) */
   int pinned;       /* the first this many items always show at the top; the rest scroll under them */
+  /* a list inside this one (the watches): items [inner_first, + inner_rows) show `inner_items` things from
+   * `inner_top` on; the game's style draws its scroll bar beside them. inner_rows 0: none */
+  int inner_first, inner_rows, inner_items, inner_top;
   int footer;       /* the last this many items (read-only lines) show under the list, a gap above them: not
                        part of it (they don't scroll, and the scroll bar is the list's), above the hint */
 };

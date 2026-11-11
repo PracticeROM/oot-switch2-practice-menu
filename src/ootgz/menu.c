@@ -455,17 +455,48 @@ void menu_item_line(menu_item_t *item, char *buf, int len)
   snprintf(buf, len, "%c%s %s", item->icon, wide_icon ? "\x03" : "", rest);
 }
 
-/* A plain number with a known maximum: how many digits shorter it is than that maximum. Its row keeps room for
- * them, so the menu's value column (the game's style) and width don't move as the number grows. */
+/* The item's value as shown now and the widest it can be: a plain number's maximum, an option's longest choice
+ * (gfx_row_value: the value column keeps room for it, so it doesn't move as the value changes). False: neither. */
+static bool item_value(menu_item_t *item, char *shown, char *widest, int len)
+{
+  shown[0] = widest[0] = 0;
+  if (item->kind == MI_NUMBER && !item->text && item->num_max) {
+    int32_t number = item->get_num(item), max = item->num_max(item);
+    if (number == NUM_UNKNOWN || max == NUM_UNKNOWN)
+      return false;
+    snprintf(shown, len, "%d", (int)number);
+    snprintf(widest, len, "%d", (int)max);
+    return true;
+  }
+  if (item->kind != MI_OPTION || item->n_choices <= 0 || (!item->choices && !item->choice_text))
+    return false;
+  char choice[GFX_VALUE_LEN];
+  int now = item->get_option(item), longest = -1;
+  for (int c = 0; c < item->n_choices; c++) {
+    if (item->choices)
+      snprintf(choice, sizeof(choice), "%s", T(item->choices[c]));
+    else
+      item->choice_text(item, c, choice, sizeof(choice));
+    int n = (int)strlen(choice);
+    if (n > longest) {
+      longest = n;
+      snprintf(widest, len, "%s", choice);
+    }
+    if (c == now)
+      snprintf(shown, len, "%s", choice);
+  }
+  if (now < 0 || now >= item->n_choices)
+    snprintf(shown, len, "-");
+  return true;
+}
+
+/* the characters more the item's value can take than it does now (gz's grid) */
 static int item_reserve(menu_item_t *item)
 {
-  if (item->kind != MI_NUMBER || item->text || !item->num_max)
+  char shown[GFX_VALUE_LEN], widest[GFX_VALUE_LEN];
+  if (!item_value(item, shown, widest, sizeof(shown)))
     return 0;
-  int32_t number = item->get_num(item), max = item->num_max(item);
-  if (number == NUM_UNKNOWN || max == NUM_UNKNOWN)
-    return 0;
-  char shown[16], widest[16];
-  int reserve = snprintf(widest, sizeof(widest), "%d", (int)max) - snprintf(shown, sizeof(shown), "%d", (int)number);
+  int reserve = (int)strlen(widest) - (int)strlen(shown);
   return reserve > 0 ? reserve : 0;
 }
 
@@ -954,7 +985,9 @@ void menu_draw(void)
     }
     draw_item(menu, index, first_item_y + row);
     gfx_row(first_item_y + row, row_kind(&menu->items[index]));
-    gfx_row_reserve(first_item_y + row, item_reserve(&menu->items[index]));
+    char shown[GFX_VALUE_LEN], widest[GFX_VALUE_LEN];
+    if (item_value(&menu->items[index], shown, widest, sizeof(shown)))
+      gfx_row_value(first_item_y + row, shown, widest);
   }
   if (menu->scroll > pinned)
     gfx_text(0, first_item_y + pinned, GFX_DIM, "^");
@@ -964,6 +997,20 @@ void menu_draw(void)
    * its rows, the thumb then filling it */
   int scrolling = n_list - pinned;
   gfx_scroll(first_item_y + pinned, scrolling < visible ? scrolling : visible, scrolling, menu->scroll - pinned);
+  if (menu->inner_rows > 0) { /* the list inside: its bar over the part of its rows on screen */
+    int from = -1, to = -1;
+    for (int row = 0; row < pinned + visible; row++) {
+      int index = row < pinned ? row : menu->scroll + row - pinned;
+      if (index >= n_list)
+        break;
+      if (index >= menu->inner_first && index < menu->inner_first + menu->inner_rows) {
+        from = from < 0 ? row : from;
+        to = row;
+      }
+    }
+    if (from >= 0)
+      gfx_inner_scroll(first_item_y + from, to - from + 1, menu->inner_items, menu->inner_top);
+  }
 
   /* The panel keeps one size while in this menu (a size change redraws it, which flashes): the hint
    * rows are always there, and the width is the widest line or hint of any item, not just the

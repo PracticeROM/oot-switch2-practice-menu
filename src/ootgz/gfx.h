@@ -15,6 +15,7 @@
 
 #define GFX_COLS 64
 #define GFX_ROWS 26
+#define GFX_VALUE_LEN 24 /* gfx_row_value's texts, with their 0 */
 #define GFX_PANELS 4
 #define GFX_PANEL_HUD 1   /* the watches */
 #define GFX_PANEL_LOG 2
@@ -120,8 +121,11 @@ typedef struct {
   char     hint[GFX_HINT_LEN];        /* the menu: its hint as one text, which the game's style wraps itself */
   uint8_t  scroll_row, scroll_rows;   /* the menu: the rows its list is in (0 rows: no list) ... */
   uint16_t scroll_items, scroll_top;  /* ... how many items scroll there, and the first one shown */
-  uint8_t  reserve[GFX_ROWS];         /* the menu: room kept in a row's value for this many more digits (a number
-                                         shorter than its maximum), so the value column doesn't move as it grows */
+  uint8_t  inner_row, inner_rows;     /* a list inside the menu's (the watches) with its own bar: its rows ... */
+  uint16_t inner_items, inner_top;    /* ... and what scrolls in them, as scroll_* */
+  /* the menu: a row's value as it is now and the widest it can be (a number's maximum, an option's longest
+   * choice), so the value column keeps room for that and doesn't move as the value changes ("": none) */
+  char     value_shown[GFX_ROWS][GFX_VALUE_LEN], value_widest[GFX_ROWS][GFX_VALUE_LEN];
 } gfx_panel_t;
 
 typedef struct { gfx_panel_t panel[GFX_PANELS]; } gfx_screen_t;
@@ -130,10 +134,12 @@ typedef struct { gfx_panel_t panel[GFX_PANELS]; } gfx_screen_t;
 void gfx_begin(void);
 void gfx_text(int col, int row, gfx_style_t style, const char *s);
 void gfx_row(int row, int kind); /* what the row is (gfx_row_kind_t, | GFX_ROW_OPENS) */
-void gfx_row_reserve(int row, int digits); /* its value can grow by this many digits (gfx_panel_t.reserve) */
+void gfx_row_value(int row, const char *shown, const char *widest); /* gfx_panel_t.value_shown, value_widest */
 void gfx_hint(const char *s);    /* the hint shown in the hint's rows, unwrapped */
 /* the list: `items` items in the rows from `row` on, `rows` of them shown from item `top` (all of them: it fits) */
 void gfx_scroll(int row, int rows, int items, int top);
+/* a list inside it (the watches): the same, its bar beside its rows, a level in */
+void gfx_inner_scroll(int row, int rows, int items, int top);
 void gfx_end(void);
 void gfx_clear(void);            /* menu closed */
 /* gz_log: a line in the log at the bottom right, shown a second and then faded out */

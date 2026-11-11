@@ -422,6 +422,11 @@ static size_t read_settings_text(char *buf, size_t buf_size, const char **from, 
   return got;
 }
 
+bool settings_sd(void)
+{
+  return mounted;
+}
+
 void settings_load(void)
 {
   if (fs_mount_sd(MOUNT) != 0 && fs_mount_sd_debug(MOUNT) != 0) {

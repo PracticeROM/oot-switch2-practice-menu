@@ -684,11 +684,18 @@ static bool lines_up(const menu_item_t *item)
          item->label[0];
 }
 
-/* the game's picture of the item is drawn before its label: the game's style, with the pictures there (not
- * when loading them failed: no room left for nothing) */
+/* the game's pictures of the item are drawn before its label: the game's style, with room for them unless
+ * none of them can come (its own, or an option's choices') */
 static bool picture_shown(const menu_item_t *item)
 {
-  return item->picture && gfx_style == GFX_STYLE_GAME && !gameimage_failed();
+  if (!item->picture || gfx_style != GFX_STYLE_GAME)
+    return false;
+  if (!gameimage_lost(item->picture))
+    return true;
+  for (int c = 0; item->kind == MI_OPTION && item->choice_pictures && c < item->n_choices; c++)
+    if (item->choice_pictures[c] && !gameimage_lost(item->choice_pictures[c]))
+      return true;
+  return false;
 }
 
 static int label_lead(const menu_item_t *item)

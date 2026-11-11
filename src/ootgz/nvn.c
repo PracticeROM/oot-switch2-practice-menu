@@ -11,10 +11,11 @@
  *   nvnDeviceInitialize          remember the device
  *   nvnCommandBufferCopyTextureToTexture  the game's copy of its scene depth: ours after it (scenedepth.c)
  *
- * Drawing uses no shaders (Switch 2 shader binaries can't be built with public tools): the text is
- * rasterised on the CPU into a buffer in our own memory pool, in the swapchain's format, and copied
- * into the texture with nvnCommandBufferCopyBufferToTexture. Two slots (pixel buffers + command
- * memory + sync) alternate, and a slot is only reused once the GPU has finished with it.
+ * In the game's style the GPU draws the panels with the game's own UI shader (gpuui.c). Otherwise (gz's
+ * style, or the game's when that can't start) the text is rasterised on the CPU into a buffer in our own
+ * memory pool, in the swapchain's format, and copied into the texture with
+ * nvnCommandBufferCopyBufferToTexture. Two slots (pixel buffers + command memory + sync) alternate, and a
+ * slot is only reused once the GPU has finished with it.
  *
  * Signatures and enum values are NVN 1's. Checked against this game: WindowBuilderSetTextures is
  * called as (builder, count, textures); TextureBuilderSetFormat gets 37 (RGBA8), 1, 13 and 61
@@ -102,6 +103,8 @@ static struct {
   int (*window_origin)(const nvn_device_t *);
   size_t (*cmd_free)(const nvn_obj_t *);
 } fn;
+/* optional: without it, the CPU panels' buffers are kept once taken */
+static void (*pool_finalize)(nvn_obj_t *);
 
 static const char *const fn_names[] = {
   "nvnMemoryPoolBuilderSetDefaults", "nvnMemoryPoolBuilderSetDevice", "nvnMemoryPoolBuilderSetFlags",
@@ -274,12 +277,23 @@ void *nvn_bootstrap_hook(const char *name)
 static enum { OV_NONE, OV_READY, OV_FAILED } overlay_state;
 /* drawing with the game's UI shader (gpuui.c): set up once the shader and the fonts are loaded */
 static enum { GPU_NONE, GPU_READY, GPU_FAILED } gpu_state;
-static nvn_obj_t cmd_buffer, pixel_pool, command_pool, slot_sync[SLOTS];
-static uint8_t *pixel_mem, *command_mem, *control_mem;
-/* Opaque: the menu panel changes only on input, so it has one buffer, rewritten after waiting
+static nvn_obj_t cmd_buffer, command_pool, slot_sync[SLOTS];
+static uint8_t *command_mem, *control_mem;
+/* The panels' buffers, for drawing them on the CPU: 12 MB at 3x, more than the game's heap can spare
+ * for long. So they're taken only for that: a block per panel (the heap may have no room for one big one),
+ * at the start in gz's style, else the first time the panel is drawn on the CPU; and given back as soon as
+ * the GPU draws the panels instead.
+ * Opaque: the menu panel changes only on input, so it has one buffer, rewritten after waiting
  * for the GPU; the other panels change every frame, so they have one buffer per slot. */
 static const int buffers_per_panel[GFX_PANELS] = { 1, SLOTS, SLOTS, SLOTS };
-static size_t pixel_offset[GFX_PANELS][SLOTS], pixel_buffer_size[GFX_PANELS];
+static const char *const panel_names[GFX_PANELS] = { "the menu", "the watches", "the log", "the input display" };
+static size_t pixel_buffer_size[GFX_PANELS];
+static nvn_obj_t pixel_pool[GFX_PANELS];
+static uint8_t *pixel_mem[GFX_PANELS];
+static bool pixels_ready[GFX_PANELS];
+static unsigned pixels_retry[GFX_PANELS]; /* after no memory for them: frame_count to try again at */
+static bool pixels_warned[GFX_PANELS];
+#define PIXELS_RETRY_FRAMES 300
 static const int panel_max_cols[GFX_PANELS] = { GFX_COLS, HUD_COLS, LOG_COLS, INPUT_COLS };
 static const int panel_max_rows[GFX_PANELS] = { GFX_ROWS, HUD_ROWS, GFX_LOG_ROWS, PAD_ROWS };
 
@@ -357,6 +371,32 @@ static int auto_scale(int height)
   return scale < 1 ? 1 : scale > MAX_SCALE ? MAX_SCALE : scale;
 }
 
+/* panel p's buffers, for drawing it on the CPU (see pixel_mem); false: no memory for them now */
+static bool pixels_take(int p)
+{
+  if (pixels_ready[p])
+    return true;
+  if ((int)(frame_count - pixels_retry[p]) < 0)
+    return false;
+  size_t size = pixel_buffer_size[p] * (size_t)buffers_per_panel[p];
+  pixel_mem[p] = aligned_alloc(PAGE_SIZE, size);
+  if (!pixel_mem[p] || !make_pool(&pixel_pool[p], pixel_mem[p], size, POOL_CPU_UNCACHED | POOL_GPU_UNCACHED)) {
+    if (!pixels_warned[p])
+      log_printf("on-screen drawing: %s for %s (%u KiB) on the CPU; trying again", pixel_mem[p] ? "no memory pool" : "no memory",
+                 panel_names[p], (unsigned)(size / 1024));
+    pixels_warned[p] = true;
+    free(pixel_mem[p]);
+    pixel_mem[p] = 0;
+    pixels_retry[p] = frame_count + PIXELS_RETRY_FRAMES;
+    return false;
+  }
+  for (int b = 0; b < SLOTS; b++)
+    drawn_w[p][b] = 0; /* nothing in them yet */
+  pixels_ready[p] = true;
+  log_printf("on-screen drawing: %u KiB for %s on the CPU", (unsigned)(size / 1024), panel_names[p]);
+  return true;
+}
+
 static bool overlay_init(void)
 {
   if (!real_getproc || !device)
@@ -370,6 +410,7 @@ static bool overlay_init(void)
       return false;
     }
   }
+  pool_finalize = (void (*)(nvn_obj_t *))real_getproc(device, "nvnMemoryPoolFinalize");
   nvn_texture_t *first = swapchain_textures[0];
   int height = fn.tex_height(first);
   swapchain_format = fn.tex_format(first);
@@ -380,25 +421,18 @@ static bool overlay_init(void)
     overlay_fail("unsupported swapchain format (see the log line above)");
     return false;
   }
-  /* sized for the scale at this resolution; a larger picture later keeps this scale */
+  /* sized for the scale at this resolution; a larger picture later keeps this scale (taken when they're
+   * first used: pixels_take) */
   alloc_scale = auto_scale(height);
-  size_t total = 0;
-  for (int p = 0; p < GFX_PANELS; p++) {
+  for (int p = 0; p < GFX_PANELS; p++)
     pixel_buffer_size[p] = round_page(panel_area(p, alloc_scale * SC_ONE) * bytes_per_pixel);
-    for (int b = 0; b < buffers_per_panel[p]; b++) {
-      pixel_offset[p][b] = total;
-      total += pixel_buffer_size[p];
-    }
-  }
-  pixel_mem = aligned_alloc(PAGE_SIZE, total);
   command_mem = aligned_alloc(PAGE_SIZE, CMD_SIZE * SLOTS);
   control_mem = aligned_alloc(PAGE_SIZE, CTRL_SIZE * SLOTS);
-  if (!pixel_mem || !command_mem || !control_mem) {
+  if (!command_mem || !control_mem) {
     overlay_fail("out of memory");
     return false;
   }
-  if (!make_pool(&pixel_pool, pixel_mem, total, POOL_CPU_UNCACHED | POOL_GPU_UNCACHED) ||
-      !make_pool(&command_pool, command_mem, CMD_SIZE * SLOTS, POOL_CPU_UNCACHED | POOL_GPU_CACHED)) {
+  if (!make_pool(&command_pool, command_mem, CMD_SIZE * SLOTS, POOL_CPU_UNCACHED | POOL_GPU_CACHED)) {
     overlay_fail("memory pool");
     return false;
   }
@@ -412,9 +446,12 @@ static bool overlay_init(void)
       return false;
     }
   origin_lower_left = fn.window_origin(device) == 0;
-  log_printf("on-screen drawing ready (scale %d, %u KiB of panels, origin %s)", alloc_scale,
-             (unsigned)(total / 1024), origin_lower_left ? "lower left" : "upper left");
+  log_printf("on-screen drawing ready (scale %d, origin %s)", alloc_scale,
+             origin_lower_left ? "lower left" : "upper left");
   overlay_state = OV_READY;
+  if (gfx_style != GFX_STYLE_GAME) /* gz's style: its buffers now, while the heap has the room */
+    for (int p = 0; p < GFX_PANELS; p++)
+      pixels_take(p);
   return true;
 }
 
@@ -429,10 +466,12 @@ static bool overlay_init(void)
 static enum { ST_NONE, ST_READY, ST_FAILED } see_through_state;
 /* the menu panel's second buffer (opaque, it has only one) */
 static nvn_obj_t menu_second_pool;
+static bool menu_second_made; /* its pool */
 static uint8_t *menu_second_mem;
 static size_t menu_second_size;
 /* what was under each panel, read back from the picture, per slot */
 static nvn_obj_t readback_pool[GFX_PANELS][SLOTS];
+static bool readback_made[GFX_PANELS][SLOTS];
 static uint8_t *readback_mem[GFX_PANELS][SLOTS];
 static size_t readback_size[GFX_PANELS];
 static nvn_region_t readback_region[GFX_PANELS][SLOTS]; /* what each readback holds */
@@ -447,14 +486,22 @@ static int text_mask_cols[GFX_PANELS], text_mask_rows[GFX_PANELS];
 
 static void see_through_free(void)
 {
+  if (menu_second_made && pool_finalize)
+    pool_finalize(&menu_second_pool);
+  menu_second_made = false;
   free(menu_second_mem);
   menu_second_mem = 0;
   for (int p = 0; p < GFX_PANELS; p++) {
     free(text_mask[p]);
     text_mask[p] = 0;
+    text_mask_cols[p] = 0; /* built afresh */
     for (int b = 0; b < SLOTS; b++) {
+      if (readback_made[p][b] && pool_finalize)
+        pool_finalize(&readback_pool[p][b]);
+      readback_made[p][b] = false;
       free(readback_mem[p][b]);
       readback_mem[p][b] = 0;
+      readback_region[p][b] = (nvn_region_t){ 0 };
     }
   }
 }
@@ -475,6 +522,7 @@ static bool see_through_init(int menu_max_height)
   total += menu_second_size;
   bool ok = menu_second_mem &&
             make_pool(&menu_second_pool, menu_second_mem, menu_second_size, POOL_CPU_UNCACHED | POOL_GPU_UNCACHED);
+  menu_second_made = ok;
   for (int p = 0; p < GFX_PANELS && ok; p++) {
     /* one row per font-pixel row: at most the panel's font height, whatever the scale */
     if (p == GFX_PANEL_INPUT)
@@ -488,6 +536,7 @@ static bool see_through_init(int menu_max_height)
       readback_mem[p][b] = aligned_alloc(PAGE_SIZE, readback_size[p]);
       ok = readback_mem[p][b] != 0 && make_pool(&readback_pool[p][b], readback_mem[p][b], readback_size[p],
                                                 POOL_CPU_CACHED | POOL_GPU_UNCACHED);
+      readback_made[p][b] = ok;
       total += readback_size[p];
     }
     total += text_mask_size[p];
@@ -508,14 +557,14 @@ static bool see_through_init(int menu_max_height)
  * for the see-through path, which uses a buffer per slot. */
 static uint8_t *panel_buffer_ptr(int p, int b)
 {
-  return p == PANEL_MENU && b == 1 ? menu_second_mem : pixel_mem + pixel_offset[p][b];
+  return p == PANEL_MENU && b == 1 ? menu_second_mem : pixel_mem[p] + (size_t)b * pixel_buffer_size[p];
 }
 
 static nvn_addr_t panel_buffer_addr(int p, int b)
 {
   if (p == PANEL_MENU && b == 1)
     return fn.pool_address(&menu_second_pool);
-  return fn.pool_address(&pixel_pool) + pixel_offset[p][b];
+  return fn.pool_address(&pixel_pool[p]) + (nvn_addr_t)b * pixel_buffer_size[p];
 }
 
 /* --- drawing ------------------------------------------------------------------------------------- */
@@ -1306,6 +1355,49 @@ static bool wait_gpu_idle(void)
   return true;
 }
 
+/* any panel's buffers are held */
+static bool pixels_held(void)
+{
+  for (int p = 0; p < GFX_PANELS; p++)
+    if (pixels_ready[p])
+      return true;
+  return false;
+}
+
+/* gives the panels' buffers back, and the see-through background's; false: the GPU hung. Without
+ * nvnMemoryPoolFinalize they're kept. */
+static bool pixels_give_back(void)
+{
+  if (!pool_finalize)
+    return true;
+  if (!wait_gpu_idle()) /* it may still be copying from them */
+    return false;
+  for (int p = 0; p < GFX_PANELS; p++) {
+    if (pixels_ready[p])
+      pool_finalize(&pixel_pool[p]);
+    pixels_ready[p] = false;
+    free(pixel_mem[p]);
+    pixel_mem[p] = 0;
+  }
+  if (see_through_state == ST_READY)
+    see_through_free();
+  see_through_state = ST_NONE; /* (after a failure too: there may be the room now) */
+  log_printf("on-screen drawing: the panels' buffers given back (the GPU draws them)");
+  return true;
+}
+
+/* no memory for the menu's buffers in gz's style: the game's style instead (the GPU's drawing needs much
+ * less), so the menu can be seen; false if that can't be either */
+static bool menu_without_pixels(void)
+{
+  if (gfx_style == GFX_STYLE_GAME || gpu_state == GPU_FAILED || !uishader_program(0) || !gamefont_ready())
+    return false;
+  gfx_style = GFX_STYLE_GAME;
+  log_printf("on-screen drawing: no memory for gz's style; the game's instead");
+  gfx_notice_later("gz's style: the game has no memory free for it; the game's style instead");
+  return true;
+}
+
 /* The part of the texture that's shown. The game can render into a larger texture than it
  * displays (Lichii: 2560x1440 textures, crop 1920x1080), so positions come from the crop. */
 static nvn_rect_t visible_area(const nvn_window_t *window, int texture_width, int texture_height)
@@ -1597,10 +1689,14 @@ static void draw_overlay(nvn_queue_t *queue, nvn_window_t *window, int index)
   frame.menu_y = frame.area.h * MENU_Y_PERMILLE / 1000;
   /* the game's style on the GPU, once its shader and fonts are loaded (game thread, first_frame) */
   if (gpu_state == GPU_NONE && gfx_style == GFX_STYLE_GAME && uishader_program(0) && gamefont_ready()) {
+    if (pixels_held() && !pixels_give_back()) /* their memory first: the GPU's drawing needs some */
+      return;
     gpu_state = gpuui_init(real_getproc, device) ? GPU_READY : GPU_FAILED;
     overlayui_failed = gpu_state == GPU_FAILED; /* the game thread makes the overlays' rectangles instead */
   }
   bool gpu = gpu_state == GPU_READY && gfx_style == GFX_STYLE_GAME;
+  if (gpu && pixels_held() && !pixels_give_back())
+    return;
   /* tell the menu how many rows fit under the D-pad (the GPU lays it out with taller rows) */
   int menu_space = frame.area.h - frame.menu_y - frame.margin;
   int fit = gpu ? nativeui_menu_rows(menu_space, frame.scale) : (menu_space * SC_ONE / frame.scale - FONT_H) / CELL_H;
@@ -1611,7 +1707,7 @@ static void draw_overlay(nvn_queue_t *queue, nvn_window_t *window, int index)
   /* the game's style reads nothing back: on the GPU its band is blended there, else it's drawn opaque */
   if (gfx_style == GFX_STYLE_GAME && nativeui_ready())
     frame.see_through = false;
-  if (frame.see_through && see_through_state == ST_NONE && !see_through_init(menu_space))
+  if (frame.see_through && see_through_state == ST_NONE && (!pixels_take(PANEL_MENU) || !see_through_init(menu_space)))
     frame.see_through = false;
   /* panels with no background are drawn as rectangles (draw_clear_rects): no read-back for them */
   int hud_bottom_right = -1; /* the watches' top edge when they're at the bottom right: the log goes above */
@@ -1703,6 +1799,11 @@ static void draw_overlay(nvn_queue_t *queue, nvn_window_t *window, int index)
     if (panel->clear && p >= GFX_PANEL_LOG) {
       plan_clear_panel(draw, p, panel, cols, rows, scale);
       n++;
+      continue;
+    }
+    if (!pixels_take(p)) {
+      if (p == PANEL_MENU && menu_without_pixels())
+        return; /* drawn on the GPU from the next frame */
       continue;
     }
     if (frame.see_through) {

@@ -10,7 +10,9 @@
  * section), or 0. */
 uintptr_t *got_slot(uintptr_t module, const char *name);
 
-/* *slot = replacement; returns 0 on success, or a message. */
-const char *got_hook(uintptr_t module, const char *name, void *replacement);
+/* Points the slot at `replacement`. *previous gets the slot's old value first, so the replacement can
+ * call it (another module's wrapper, or the original) as soon as the slot points at it. Returns 0 on
+ * success, or a message. */
+const char *got_hook(uintptr_t module, const char *name, void *replacement, void **previous);
 
 #endif

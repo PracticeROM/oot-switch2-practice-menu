@@ -164,6 +164,8 @@ Lichii runs the game's own rtld, so a working load there is good evidence for ha
   dynamic section) for `nvnBootstrapLoader` and the five `nn::hid::GetNpadStates` overloads.
   Checked offline: the slot found for `nvnBootstrapLoader` is `main+0x4cbf710`, the one main's
   PLT stub at `main+0x3c42a90` jumps through. This doesn't depend on rtld's search order.
+  Each wrapper calls what its slot held before (the sdk's function, or another module's wrapper
+  hooked earlier), so other add-ons that hook the same imports keep working next to this one.
 - **NVN.** The game gets `nvnDeviceGetProcAddress` from the bootstrap loader and fetches every
   function by name through it (loader at `main+0x129e000`), so the wrapped GetProcAddress
   swaps in our `nvnQueuePresentTexture`, `nvnWindowBuilderSetTextures` and

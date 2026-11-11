@@ -155,12 +155,8 @@ static const char *const hid_public_names[] = {
   PUBLIC("16NpadJoyLeftState"), PUBLIC("17NpadJoyRightState"),
 };
 #define N_HID (sizeof(hid_public_names) / sizeof(*hid_public_names))
-/* the sdk functions (imported by this module, so they bypass main's GOT) */
-int hid_public_0(void *, int, const uint32_t *) __asm__(PUBLIC("16NpadFullKeyState"));
-int hid_public_1(void *, int, const uint32_t *) __asm__(PUBLIC("17NpadHandheldState"));
-int hid_public_2(void *, int, const uint32_t *) __asm__(PUBLIC("16NpadJoyDualState"));
-int hid_public_3(void *, int, const uint32_t *) __asm__(PUBLIC("16NpadJoyLeftState"));
-int hid_public_4(void *, int, const uint32_t *) __asm__(PUBLIC("17NpadJoyRightState"));
+/* what each slot held before our wrapper: the sdk's function, or another module's wrapper */
+static hid_public_t hid_next[N_HID];
 
 bool input_force_active;
 uint32_t input_force_buttons;
@@ -195,11 +191,11 @@ static void filter_game_states(void *states, int count)
   }
 }
 
-/* hid_wrap_N: the public GetNpadStates overload N, then filter_game_states */
+/* hid_wrap_N: whatever slot N held before (hid_next), then filter_game_states */
 #define WRAP(n)                                                     \
   static int hid_wrap_##n(void *out, int count, const uint32_t *id) \
   {                                                                 \
-    int result = hid_public_##n(out, count, id);                    \
+    int result = hid_next[n](out, count, id);                       \
     filter_game_states(out, result < count ? result : count);       \
     return result;                                                  \
   }
@@ -211,7 +207,7 @@ const char *input_hook_game(uintptr_t main_base)
 {
   const char *last_error = 0;
   for (unsigned i = 0; i < N_HID; i++) {
-    const char *error = got_hook(main_base, hid_public_names[i], hid_wraps[i]);
+    const char *error = got_hook(main_base, hid_public_names[i], hid_wraps[i], (void **)&hid_next[i]);
     if (error)
       last_error = error;
   }

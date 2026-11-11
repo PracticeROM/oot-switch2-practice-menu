@@ -2,7 +2,9 @@
 #ifndef NVN_H
 #define NVN_H
 
-/* Replacement for main's nvnBootstrapLoader import (installed with got_hook at module init). */
-void *nvn_bootstrap_hook(const char *name);
+#include <stdint.h>
+
+/* Point main's nvnBootstrapLoader import at our wrapper (module init); returns 0 or a message. */
+const char *nvn_hook_game(uintptr_t main_base);
 
 #endif

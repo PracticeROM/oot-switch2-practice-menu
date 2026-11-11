@@ -69,13 +69,14 @@ uintptr_t *got_slot(uintptr_t module, const char *name)
   return 0;
 }
 
-const char *got_hook(uintptr_t module, const char *name, void *replacement)
+const char *got_hook(uintptr_t module, const char *name, void *replacement, void **previous)
 {
   uintptr_t *slot = got_slot(module, name);
   if (!slot)
     return "import not found";
   if (!sys_mapped((uintptr_t)slot, 8, SYS_PERM_R | SYS_PERM_W))
     return "GOT is read-only";
-  *slot = (uintptr_t)replacement;
+  *previous = (void *)__atomic_load_n(slot, __ATOMIC_ACQUIRE);
+  __atomic_store_n(slot, (uintptr_t)replacement, __ATOMIC_RELEASE);
   return 0;
 }

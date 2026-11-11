@@ -276,6 +276,8 @@ bool gd_set_str(uint32_t hash, const char *s)
 
 #define GD_SEQUENCE_IS_PAUSE 0x604AEBE1u                   /* Sequence_IsPause (bool) */
 #define GD_SEQUENCE_GAME_PAUSE_REQUEST_COUNT 0x64A61098u   /* Sequence_GamePauseRequestCount (int) */
+#define GD_SEQUENCE_IS_PRE_PAUSE 0xBF5BF25Fu               /* Sequence_IsPreGamePause (bool) */
+#define GD_SEQUENCE_PRE_PAUSE_REQUEST_COUNT 0xEF935C2Du    /* Sequence_PreGamePauseRequestCount (int) */
 
 bool gd_game_paused(bool *is_pause, int32_t *pause_requests)
 {
@@ -288,4 +290,13 @@ bool gd_game_paused(bool *is_pause, int32_t *pause_requests)
   if (pause_requests)
     *pause_requests = requests;
   return pause || requests > 0;
+}
+
+bool gd_game_pausing(void)
+{
+  bool pre = false;
+  int32_t requests = 0;
+  gd_get_bool(GD_SEQUENCE_IS_PRE_PAUSE, &pre);
+  gd_get_int(GD_SEQUENCE_PRE_PAUSE_REQUEST_COUNT, &requests);
+  return pre || requests > 0;
 }

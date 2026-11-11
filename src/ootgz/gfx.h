@@ -152,6 +152,9 @@ void gfx_input_place(gfx_corner_t corner, int x_permille, int y_permille); /* ..
 extern volatile int gfx_custom_x[GFX_PANELS], gfx_custom_y[GFX_PANELS];
 /* gz's pause display at the top left: 0 none, 1 paused (two bars), 2 advancing a frame (bar + play) */
 extern volatile int gfx_pause_icon;
+/* game thread, before gfx_frame: the watches, the input display and the log are left out of this frame
+ * (unless the menu is open) */
+extern bool gfx_hud_hidden;
 extern volatile uint32_t gfx_presents; /* frames the game has presented (nvn.c) */
 void gfx_frame(void);            /* publish; once per frame after everything has drawn */
 

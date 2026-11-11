@@ -59,5 +59,8 @@ bool        gd_set_str(uint32_t hash, const char *s);
  * counted in Sequence_GamePauseRequestCount. Frame advance holds the game without setting either.
  * Either out pointer may be 0. */
 bool        gd_game_paused(bool *is_pause, int32_t *pause_requests);
+/* The game's pause about to start: opening the pause screen or the map sets Sequence_IsPreGamePause and
+ * Sequence_PreGamePauseRequestCount about 60 ms before gd_game_paused, while the menu fades in. */
+bool        gd_game_pausing(void);
 
 #endif

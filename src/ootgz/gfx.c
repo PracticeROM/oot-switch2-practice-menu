@@ -40,6 +40,7 @@ volatile int gfx_menu_scale;
 volatile int gfx_style = GFX_STYLE_GAME;
 volatile int gfx_custom_x[GFX_PANELS] = { -1, -1, -1, -1 }, gfx_custom_y[GFX_PANELS] = { -1, -1, -1, -1 };
 volatile int gfx_pause_icon;
+bool gfx_hud_hidden;
 volatile uint32_t gfx_presents;
 
 /* Write text into a panel from (col, row), clipped to the grid. */
@@ -434,6 +435,11 @@ void gfx_frame(void)
   screen->panel[GFX_PANEL_INPUT] = input_panel;
   measure_panel(&screen->panel[GFX_PANEL_INPUT]);
   memset(&input_panel, 0, sizeof(input_panel));
+  if (gfx_hud_hidden && !menu_open) { /* built all the same: the log's lines age meanwhile */
+    memset(&screen->panel[PANEL_HUD], 0, sizeof(screen->panel[PANEL_HUD]));
+    memset(&screen->panel[GFX_PANEL_LOG], 0, sizeof(screen->panel[GFX_PANEL_LOG]));
+    memset(&screen->panel[GFX_PANEL_INPUT], 0, sizeof(screen->panel[GFX_PANEL_INPUT]));
+  }
 
   bool anything = screen->panel[PANEL_MENU].rows || screen->panel[PANEL_HUD].rows ||
                   screen->panel[GFX_PANEL_LOG].rows || screen->panel[GFX_PANEL_INPUT].rows;

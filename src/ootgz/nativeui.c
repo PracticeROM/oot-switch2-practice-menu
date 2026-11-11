@@ -1324,8 +1324,11 @@ static float menu_cells(const mrow_t *r, int from, bool draw)
     if (!is_text(k)) {
       int cells = c + 1 < r->cols && (unsigned char)ch[c + 1] == GFX_WIDE_REST ? 2 : 1;
       float left = col_x(r, c), width = cells * CELL_W * fp_px;
-      /* after an item's value, an icon follows it (gz padded them into a column far right) */
-      if (!r->grid && r->kind == GFX_ROW_ITEM && c > r->switch_from && pen >= 0)
+      /* after an item's value, an icon follows it (gz padded them into a column far right); in a watch's
+       * label (the lock after JS Height), it follows the label: its cell would leave a gap in the game's
+       * type, narrower than gz's grid */
+      if (!r->grid && pen >= 0 &&
+          ((r->kind == GFX_ROW_ITEM && c > r->switch_from) || (r->kind == GFX_ROW_WATCH && c < r->switch_from)))
         left = pen + r->em * 0.5f;
       if (draw)
         menu_icon(r, k, left, cells, style);

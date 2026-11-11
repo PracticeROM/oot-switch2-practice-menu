@@ -580,6 +580,44 @@ Objects:
   its intended address. The module files compile for aarch64.
 - **Not verified:** `1.0.0` has no store offsets, so locks there only show a notice that it will not work.
 
+### 5.22 Collectibles: the missing Gold Skulltulas and hearts
+- **Want:** inventory > collectibles: how many Gold Skulltulas, Heart Containers and Pieces of Heart the save has,
+  and a list of the missing ones by place.
+- **Data:** `tools/collectibles.py` builds `data/collectibles.json` from the layouts alone; `tools/gendata.py` puts
+  it in `data.c`. Each list was checked against the game's own (1.1.1 main):
+  - **Gold Skulltulas:** the 100 placed `Enemy_Skulltula_Gold` actors (114 placements: many are in both age
+    layouts) are exactly the 100 keys at `main+0x3F0B230`. Collected: Bool64bitKey of the Hash set.
+  - **Heart Containers:** the 8 `Obj_Heart_Container` placements, the same way. Main has no list of them.
+  - **Pieces of Heart:** the game's count, `main+0xC7FBF0` (returns 36; called from `main+0x57987C` and
+    `main+0x5799C8`), checks 14 Bool64bitKey keys built in its code (13 `Obj_Heart_Piece` and the
+    `Obj_GerudoValley_Heart_Piece`) and the 22 Bools at `main+0x3F0AE64` (17 events, 5 chests). The 36
+    `HeartPieceAnchor` actors (the map screen's icons) give the same set but for two anchors with another flag:
+    the Dampe race's goal chest (`IsTreasureBoxOpen.5534919361313859554`; the count has
+    `UnderTheGrave_DampeRace_HeartGeted`) and `KakarikoVillage_IsAfterSave_Npc_Hylia_025` (the count has
+    `KakarikoVillage_GatheringTokenGold_GetReward50`). The tool swaps those (`COUNTED_INSTEAD`) and keeps the
+    anchors' positions. An anchor without `MapIconHeartPieceAnchorType` links to its free-standing piece, type 1
+    to its chest, and type 2 names its Bool (`HeartPieceAnchor_GameDataPath`).
+  - **Max life** only grows per whole heart: `PlayerStatus.MaxLife` = 12 + 4 x containers + 4 x (pieces / 4,
+    rounded down), and `PouchData.Obj_Heart_Piece.StockNum` is pieces mod 4.
+- **Checked on saves:** a Python reader of `progress.sav` (outside the repository) on six slots of one player's
+  save: 83/100 Gold Skulltulas (= `PouchData.Item_Token_Gold.StockNum` 83), 6/8 Heart Containers (the two missing
+  are Bongo Bongo's and Twinrova's, whose `DefeatedEnemyNum.Enemy_DungeonBoss_*` are 0), 35/36 Pieces of Heart
+  (StockNum 3), MaxLife 68 = 12 + 4 x 6 + 4 x 8.
+- **Places:** the heading is the map (`map_label`), or the zone where one layout holds several (Hyrule Field's
+  holds Lon Lon Ranch and Lake Hylia). An actor that links to a `LocationArea` is in its zone. The others are
+  counted in Lake Hylia if they are within 199 of the centre of the `LakeHylia` zone horizontally. That zone sits at
+  (-205, -57, 559) with Scale 199 and `RigidBodyShapeType` 3. This is **approximate** (`area_approximate`, 8
+  collectibles): the shape's size and height aren't known. A sphere of radius 199 would leave out the
+  Skulltula in the lake's bean soil (`Gimmick_MagicBeanSoil_LakeHylia`). A cut at z > 380 gives the same 8.
+- **Lines:** a Skulltula's age comes from the layouts it's placed in (`_Child`, `_Adult`, both: "any age"); its
+  `Presence` conditions aren't read. Its `Dynamic` gives the room (`DefaultDungeonRoomIndex`), night
+  (`Enemy_Skulltula_Gold_Nocturnal`, 24), bean soil (`_IsMagicBeanSoil`, 10, all of which also have
+  `_AppearPopOut`) and pops out (`_AppearPopOut`). Event pieces are labelled from their flag's name, so
+  "a villager's reward" (`Npc_Hylia_001_IsGetHeartPiece`, Kakariko) and "frogs, second game"
+  (`MiniGame_FrogTenors_InsectRepellent`) say no more than the names do. The position is the actor's (a piece's
+  anchor), in the same units as Link's (air walls compare them too).
+- **Not verified:** the page in game (the counts should match the numbers above); 1.0.0 (see Bool64bitKey).
+
 ## 6. Things that do not work
 
 - **Using character 0x7F for an icon:** menu, log, splash, and input panels already use it as an

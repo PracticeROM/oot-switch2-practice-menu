@@ -138,6 +138,30 @@ SHAPE_BOX, SHAPE_CYLINDER = 0, 1
 WALL_STOPS_PLAYER, WALL_IGNORES_PLAYER = 0, 1
 PLAYER_MASKS = {"HitOnlyPlayer", "Default", None}  # rigid-body hit masks that stop Link (airwall.py PLAYER_MASKS)
 
+# collectibles (collectibles.json, from tools/collectibles.py): the boss each dungeon's Heart Container is behind
+HEART_CONTAINER_BOSSES = {"InsideTheDekuTree": "gohma", "DodongoCavern": "king dodongo",
+                          "InsideJabuJabuBelly": "barinade", "ForestTemple": "phantom ganon",
+                          "FireTemple": "volvagia", "WaterTemple": "morpha", "ShadowTemple": "bongo bongo",
+                          "SpiritTemple": "twinrova"}
+# Pieces of Heart an event gives, by the Bool that records them (what its name says)
+HEART_PIECE_EVENTS = {"DeathMountain_Enemy_Scrub_Business_HeartPiece_01": "deku scrub sells it",
+                      "HyruleField_Enemy_Scrub_Business_HeartPiece_01": "deku scrub sells it",
+                      "GoronLargePot_IsGetHeartPiece": "spinning pot",
+                      "GraveYard_DiggingHoleTour_Drop_HeartPiece": "dampe's grave-digging tour",
+                      "UnderTheGrave_DampeRace_HeartGeted": "dampe's race",
+                      "KakarikoVillage_GatheringTokenGold_GetReward50": "house of skulltula, 50 tokens",
+                      "SubEvent_FindRichard_GetHeartPiece": "find richard the dog",
+                      "Npc_Hylia_001_IsGetHeartPiece": "a villager's reward",
+                      "Npc_Hylia_045_HasDived": "lakeside lab, diving game",
+                      "Npc_SkullKid_Child_IsGetHeartPiece": "skull kid, saria's song",
+                      "Minigame_SkullKidSession_IsGetHeartPiece": "skull kids' ocarina game",
+                      "MiniGame_Fishing_GetHeartPiece": "fishing pond",
+                      "MiniGame_ChoiceTreasure_IsClear": "treasure chest game",
+                      "MiniGame_BombchuBowling_ClearThirdTime": "bombchu bowling",
+                      "MiniGame_FrogTenors_StormSong": "frogs, song of storms",
+                      "MiniGame_FrogTenors_InsectRepellent": "frogs, second game",
+                      "MiniGame_HorsebackArchery_GotaHeart": "horseback archery"}
+
 NO_FIELD = "{ 0, FT_NONE }"
 FIELD_TYPES = {"Int": "FT_INT", "Bool": "FT_BOOL", "Enum": "FT_ENUM", "Float": "FT_FLOAT"}
 
@@ -512,6 +536,59 @@ def write_airwalls(out, airwall_maps):
     return walls, maps
 
 
+def collectible_age(maps):
+    """The collectible_t age (CA_*) of the layouts a collectible is placed in."""
+    child = any("_Child" in name for name in maps)
+    adult = any("_Adult" in name for name in maps)
+    return {(True, True): "CA_ANY", (True, False): "CA_CHILD", (False, True): "CA_ADULT"}.get((child, adult), "CA_NONE")
+
+
+def collectible_what(kind, row):
+    """What a collectible is (None for a gold skulltula): its boss, its event, or what holds it."""
+    if kind == "heart_containers":
+        return HEART_CONTAINER_BOSSES[row["maps"][0]]
+    if kind == "heart_pieces":
+        return HEART_PIECE_EVENTS.get(row.get("flag"), row["kind"])
+    return None
+
+
+def collectible_traits(row):
+    """A gold skulltula's collectible_t traits (CT_*), as a C expression."""
+    traits = [name for key, name in (("night", "CT_NIGHT"), ("bean_soil", "CT_BEAN_SOIL"), ("pops_out", "CT_POPS_OUT"))
+              if row.get(key)]
+    return " | ".join(traits) or "0"
+
+
+def collectible_place(row):
+    """The heading a collectible goes under: its area (lake hylia, lon lon ranch ...), else its map."""
+    if row["area"]:
+        return pretty(row["area"])
+    return map_label(next(name for name in row["maps"] if "_Alternative" not in name))
+
+
+def write_collectibles(out, collectibles):
+    """inventory > collectibles: the three kinds, each sorted by place (overworld, then dungeons), then room."""
+    out.write("")
+    counts = {}
+    for kind in ("gold_skulltulas", "heart_containers", "heart_pieces"):
+        rows = []
+        for row in collectibles[kind]:
+            room = row["room"] if row.get("room") is not None else -1
+            place, what, age = collectible_place(row), collectible_what(kind, row), collectible_age(row["maps"])
+            order = (row["maps"][0] in DUNGEONS, place, room, age, what or "", row["t"])
+            rows.append((order, row, place, what, age, room))
+        out.write(f"const collectible_t data_{kind}[] = {{")
+        for _, row, place, what, age, room in sorted(rows, key=lambda item: item[0]):
+            key = f"{int(row['key'], 16):#018x}ull" if "key" in row else "0"
+            flag = f"{int(row['hash'], 16):#010x}" if "hash" in row else "0"
+            position = ", ".join(str(round(v)) for v in row["t"])
+            out.write(f"  {{ {key}, {flag}, {c_string(place)}, {c_string(what)}, {{ {position} }}, {room}, {age}, "
+                      f"{collectible_traits(row)} }},")
+        out.end_array(f"data_{kind}", blank_line=kind != "heart_pieces")
+        counts[kind] = len(rows)
+    return counts
+
+
 def main():
     field_hashes = read_json("field_hashes.json")
     extra = read_json("extra_fields.json")
@@ -529,6 +606,7 @@ def main():
     quests = write_story(out, story)
     maps, spawns = write_warps(out, warps, starters)
     walls, airwall_maps = write_airwalls(out, read_json("airwalls.json")["maps"])
+    collectibles = write_collectibles(out, read_json("collectibles.json"))
 
     missing = [title for kind, title in ITEM_SCREEN if kind in ("owned",) and title not in out.fields]
     missing += [title for title in GEAR if title not in out.fields]
@@ -536,7 +614,8 @@ def main():
         sys.exit(f"missing fields: {missing}")
     (ROOT / "src/ootgz/data.c").write_text("\n".join(out.lines) + "\n", encoding="utf-8")
     print(f"src/ootgz/data.c: {len(maps)} maps, {len(spawns)} spawns, {len(quests)} quests, "
-          f"{len(walls)} air walls in {len(airwall_maps)} maps")
+          f"{len(walls)} air walls in {len(airwall_maps)} maps, "
+          + ", ".join(f"{count} {kind.replace('_', ' ')}" for kind, count in collectibles.items()))
 
 
 if __name__ == "__main__":

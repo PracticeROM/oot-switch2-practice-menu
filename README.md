@@ -30,7 +30,8 @@ goes back.
 - **scene**: reload the map; the map's air walls drawn over the game (collision).
 - **cheats**: infinite health, rupees, magic and ammo; 2x movement speed.
 - **inventory**: items, equipment, collection (upgrades, strength, scale, magic), bottles, quest items, songs,
-  dungeon items and small keys, all through the game's own code where it needs it.
+  dungeon items and small keys, all through the game's own code where it needs it; collectibles (the missing gold
+  skulltulas, heart containers and pieces of heart, by place).
 - **equips**, **story** (quest stages, tutorials).
 - **watches**: gz's watch list: built-in watches (position, speed, angles, camera, input, timer, lag...) and
   memory watches, with display types, labels (gz's keyboard), show/hide, reordering and the wrench to see the value

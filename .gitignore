@@ -17,6 +17,8 @@ main.bin
 main.base
 romfs/
 exefs/
+# sprites of the game's items (sd:/sloperinaGZ/sprites/ on the SD card; not part of the mod or its release)
+sprites/
 
 # Python (tools/)
 __pycache__/

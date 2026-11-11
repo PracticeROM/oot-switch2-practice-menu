@@ -8,6 +8,14 @@ placed actor whose name contains "AirWall": its position, rotation (radians, X Y
 in the actor's own unscaled space. Box: centre (incl. OffsetTranslation) + half extents. Cylinder: two end
 centres + radius. Other shapes (Polytope, PhshMesh) are counted but not stored. "mask" is the rigid body's
 EnableLayerHitMask (HitOnlyPlayer, HitOnlyCharacter, ... or None = everything).
+
+"link" is what the wall does to Link on foot, from the game's collision filter (Bootup pack, PhiveConfig): a
+shape hits him when its layer hit mask (the rigid body's EnableLayerHitMask, narrowed by each material preset's
+LayerHitMaskEntity) has the Player layer and its sub-layer hit mask (EnableSubLayerHitMask, narrowed by the
+presets' SubLayerHitMaskEntity) has Unspecified, his body's sub-layer. Then "push" if the shape is also tagged
+Unridable (he can't stand on it, so he's pushed off it: the ledge in front of the Forest Temple), else "block"
+(an invisible wall: round the rocks in the Lost Woods). None: it doesn't stop him (walls for enemies, NPCs,
+animals, Epona, the camera, or Link only while he climbs).
 """
 import json
 import os
@@ -21,6 +29,9 @@ import gamefiles  # noqa: E402
 OUT = os.path.join(os.path.dirname(HERE), "data", "airwalls.json")
 LAYOUT_SUFFIX = ".bcett.byml.zs"
 NOT_SHAPES = ("Box", "Cylinder", "AutoCalc", "$parent")  # keys of a shape param that aren't other shape kinds
+PHIVE_CONFIG = ("romfs/Pack/Bootup.Nin_Ounce_NVN2.pack.zs", "Phive/Config/PhiveConfig.byml")
+LINK_LAYER, LINK_SUB_LAYER = "Player", "Unspecified"  # Link's body on foot (Player_Base: CharacterMatterRigidBody)
+UNRIDABLE_TAG = "Unridable"
 
 
 def member(path):
@@ -63,15 +74,50 @@ def _shapes_of(shape_param):
     return shapes
 
 
+class CollisionFilter:
+    """The game's collision filter tables: whether a shape hits Link (see the module's docstring)."""
+
+    def __init__(self):
+        config = byml.load(gamefiles.sarc(gamefiles.read(PHIVE_CONFIG[0]))[PHIVE_CONFIG[1]])
+        self.layer_masks = {e["ComponentName"]: int(e["MaskValue"]) for e in config["LayerHitMaskEntityCollection"]}
+        self.sub_layer_masks = {e["ComponentName"]: int(e["MaskValue"])
+                                for e in config["SubLayerHitMaskEntityCollection"]}
+        self.presets = {e["ComponentName"]: e for e in config["MaterialPresetCollection"]}
+        self.link_layer = 1 << config["LayerEntityCollection"].index(LINK_LAYER)
+        self.link_sub_layer = 1 << config["SubLayerEntityCollection"].index(LINK_SUB_LAYER)
+        self.hit_all = self.layer_masks["HitAll"]
+
+    def link(self, rigid_body, presets):
+        """'push', 'block' or None for a shape with these material presets on this rigid body."""
+        layers = self.layer_masks[rigid_body.get("EnableLayerHitMask") or "HitAll"]
+        sub_layers = self.sub_layer_masks[rigid_body.get("EnableSubLayerHitMask") or "HitAll"]
+        tags = set()
+        for name in presets:
+            preset = self.presets[name]
+            if preset.get("LayerHitMaskEntity"):
+                layers &= self.layer_masks[preset["LayerHitMaskEntity"]]
+            if preset.get("SubLayerHitMaskEntity"):
+                sub_layers &= self.sub_layer_masks[preset["SubLayerHitMaskEntity"]]
+            tags.update(preset.get("UserShapeTagMask") or [])
+        if not (layers & self.link_layer and sub_layers & self.link_sub_layer):
+            return None
+        return "push" if UNRIDABLE_TAG in tags else "block"
+
+
+LINK_ORDER = (None, "block", "push")  # an actor with shapes of more than one: the last of these
 _cache = {}
+_filter = None
 
 
 def actor_shapes(actor):
-    """(shapes, mask, skipped) for an actor name, from its pack."""
+    """(shapes, mask, skipped, link) for an actor name, from its pack."""
+    global _filter
+    if _filter is None:
+        _filter = CollisionFilter()
     if actor in _cache:
         return _cache[actor]
     path = f"romfs/Pack/Actor/{actor}.pack.zs"
-    result = ([], None, [])
+    result = ([], None, [], None)
     try:
         files = gamefiles.sarc(gamefiles.read(path))
     except KeyError:  # no pack for this actor
@@ -83,16 +129,25 @@ def actor_shapes(actor):
     else:
         controller_set_name = f"Phive/ControllerSetParam/{actor}.phive__ControllerSetParam.bgyml"
     controller_set = load_chain(files, controller_set_name)
-    shapes, skipped = [], []
+    rigid_bodies = [load_chain(files, member(ref["FilePath"]))
+                    for ref in controller_set.get("RigidBodyEntityNamePathAry") or []]
+    shapes, skipped, link = [], [], None
     for ref in controller_set.get("ShapeNamePathAry") or []:
         shape_param = load_chain(files, member(ref["FilePath"]))
         shapes += _shapes_of(shape_param)
         skipped += [key for key in shape_param if key not in NOT_SHAPES]
+        # the rigid bodies this shape is in (by name; all of them if none names it)
+        bodies = [body for body in rigid_bodies if body.get("ShapeName") == ref.get("Name")] or rigid_bodies
+        for kind in ("Box", "Cylinder"):
+            for shape in shape_param.get(kind) or []:
+                for body in bodies:
+                    shape_link = _filter.link(body, shape.get("MaterialPresets") or [])
+                    if LINK_ORDER.index(shape_link) > LINK_ORDER.index(link):
+                        link = shape_link
     mask = None
-    for ref in controller_set.get("RigidBodyEntityNamePathAry") or []:
-        rigid_body = load_chain(files, member(ref["FilePath"]))
+    for rigid_body in rigid_bodies:
         mask = rigid_body.get("EnableLayerHitMask", mask)
-    result = (shapes, mask, skipped)
+    result = (shapes, mask, skipped, link)
     _cache[actor] = result
     return result
 
@@ -123,13 +178,13 @@ def main():
             actor = placed.get("Gyaml", "")
             if "AirWall" not in actor:
                 continue
-            shapes, mask, skipped = actor_shapes(actor)
+            shapes, mask, skipped, link = actor_shapes(actor)
             for kind in skipped:
                 skipped_total[kind] = skipped_total.get(kind, 0) + 1
             if not shapes:
                 continue
             maps.setdefault(map_name, []).append({
-                "actor": actor, "part": part, "mask": mask, "hash": placed.get("Hash"),
+                "actor": actor, "part": part, "mask": mask, "link": link, "hash": placed.get("Hash"),
                 "t": [float(v) for v in placed.get("Translate", [0, 0, 0])],
                 "r": [float(v) for v in placed.get("Rotate") or [0, 0, 0]],
                 "s": _scale_of(placed),
@@ -139,6 +194,11 @@ def main():
         json.dump({"source": "game files (tools/airwalls.py)", "maps": maps}, f, separators=(",", ":"))
     total = sum(len(walls) for walls in maps.values())
     print(f"{total} air walls in {len(maps)} maps -> {OUT}")
+    links = {}
+    for walls in maps.values():
+        for wall in walls:
+            links[wall["link"]] = links.get(wall["link"], 0) + 1
+    print("what they do to Link:", {str(k): v for k, v in sorted(links.items(), key=lambda kv: str(kv[0]))})
     if skipped_total:
         print("shapes not stored (not box/cylinder):", skipped_total)
 

@@ -70,7 +70,7 @@ void gpuui_shape(uint32_t id, int w, int h, gpu_paint_t paint, const void *arg, 
  * in mem (4 KiB-aligned, `size` bytes, a multiple of 4 KiB, kept), each at its offset in its packaged
  * layout, numbered from `first`. Game thread, once a batch (0 to GPU_IMAGES - 1, each its own memory);
  * the render thread makes a batch's textures when one of them is first drawn. */
-#define GPU_IMAGES 88
+#define GPU_IMAGES 106 /* gameimage.h's GAMEIMAGES and the icons' atlas */
 typedef struct {
   size_t offset, size;       /* size 0: not there */
   int width, height, format; /* NVN's format */
@@ -84,7 +84,7 @@ void gpuui_images_publish(int batch, int first, uint8_t *mem, size_t size, const
  * the filled ones up before the frame's drawing. Drawn as picture GPU_ICONS_IMAGE (gpuui_icon). */
 #define GPU_ICON_PX 64
 #define GPU_ICON_COLS 8
-#define GPU_ICON_ROWS 9
+#define GPU_ICON_ROWS 12
 #define GPU_ICONS_IMAGE (GPU_IMAGES - 1)
 void gpuui_icons_publish(uint8_t *mem, size_t size);
 void gpuui_icon_filled(int slot);

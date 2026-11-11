@@ -71,6 +71,12 @@ void gfx_row(int row, int kind)
     menu_panel.kind[row] = (uint8_t)kind;
 }
 
+void gfx_row_reserve(int row, int digits)
+{
+  if (row >= 0 && row < GFX_ROWS)
+    menu_panel.reserve[row] = (uint8_t)(digits < 0 ? 0 : digits > 255 ? 255 : digits);
+}
+
 void gfx_hint(const char *s)
 {
   snprintf(menu_panel.hint, sizeof(menu_panel.hint), "%s", s ? s : "");
@@ -324,8 +330,7 @@ static char plain_char(char ch)
     case 0:
     case GFX_PICTURE:
     case GFX_WIDE_REST: return ' ';
-    default: /* a picture's number (GFX_PICTURE_ID: the pictures number under gpuui.h's GPU_IMAGES, 88) */
-      return (unsigned char)ch >= 0xA0 && (unsigned char)ch < 0xA0 + 88 ? ' ' : ch;
+    default: return ch;
   }
 }
 
@@ -356,7 +361,9 @@ static void log_menu(const gfx_panel_t *menu)
     char line[GFX_COLS + 3];
     bool selected = false;
     for (int c = 0; c < GFX_COLS; c++) {
-      line[c + 2] = plain_char(menu->ch[r][c]);
+      /* a picture's number (GFX_PICTURE_ID) is the character after GFX_PICTURE */
+      bool picture_id = c > 0 && menu->ch[r][c - 1] == GFX_PICTURE;
+      line[c + 2] = picture_id ? ' ' : plain_char(menu->ch[r][c]);
       selected |= menu->style[r][c] == GFX_SELECTED;
     }
     line[0] = selected ? '>' : ' ';
@@ -401,7 +408,7 @@ static void measure_panel(gfx_panel_t *panel)
       hash = hash_mix(hash, (uint8_t)panel->ch[r][c] ^ (uint32_t)panel->style[r][c] << 8);
     }
   for (int r = 0; r < GFX_ROWS; r++)
-    hash = hash_mix(hash, panel->kind[r]);
+    hash = hash_mix(hash, panel->kind[r] ^ (uint32_t)panel->reserve[r] << 8);
   for (const char *h = panel->hint; *h; h++)
     hash = hash_mix(hash, (uint8_t)*h);
   hash = hash_mix(hash, (uint32_t)panel->scroll_row << 24 ^ (uint32_t)panel->scroll_rows << 16 ^ panel->scroll_top);

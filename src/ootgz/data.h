@@ -69,7 +69,9 @@ extern const warp_map_t  data_warp_maps[];   extern const int data_n_warp_maps;
 extern const spawn_t     data_spawns[];      extern const int data_n_spawns;
 
 /* air walls (airwalls.json): a wall's world point for a local shape point p is t + R (s * p), with
- * R = Rz Ry Rx from r (radians), as sead's makeR (airwall.py). kind 0 stops Link, 1 doesn't. */
+ * R = Rz Ry Rx from r (radians), as sead's makeR (airwall.py). kind (tools/airwalls.py "link"): 0 stops Link (an
+ * invisible wall), 1 doesn't touch him on foot (enemies, NPCs, animals, camera...), 2 pushes him off (he can't stand
+ * on it). */
 typedef struct { uint8_t type; float a[3], b[3]; float radius; } airshape_t; /* box: centre, half; cylinder: a, b, r */
 typedef struct { float t[3], r[3], s[3]; uint16_t first_shape; uint8_t n_shapes, kind; } airwall_t;
 typedef struct { const char *map; uint16_t first, n; } airmap_t;

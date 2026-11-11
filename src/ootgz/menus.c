@@ -554,7 +554,7 @@ static const struct { const char *label; uint8_t picture; } item_pictures[] = {
   { "ocarina of time", GAMEPIC_OCARINA_TIME }, { "bottle a", GAMEPIC_BOTTLE }, { "bottle b", GAMEPIC_BOTTLE },
   { "bottle c", GAMEPIC_BOTTLE }, { "bottle d", GAMEPIC_BOTTLE }, { "bottle e", GAMEPIC_BOTTLE },
   { "kokiri sword", GAMEPIC_SWORD_KOKIRI }, { "master sword", GAMEPIC_SWORD_MASTER },
-  { "big sword", GAMEPIC_SWORD_GIANT }, { "kokiri shield", GAMEPIC_SHIELD_DEKU },
+  { "big sword", GAMEPIC_SWORD_GIANT }, { "deku shield", GAMEPIC_SHIELD_DEKU },
   { "hylian shield", GAMEPIC_SHIELD_HYLIAN }, { "mirror shield", GAMEPIC_SHIELD_MIRROR },
   { "goron tunic", GAMEPIC_TUNIC_GORON }, { "zora tunic", GAMEPIC_TUNIC_ZORA }, { "iron boots", GAMEPIC_BOOTS_IRON },
   { "hover boots", GAMEPIC_BOOTS_HOVER }, { "lenses of truth", GAMEPIC_LENS }, { "echo gem", GAMEPIC_AGONY },
@@ -564,7 +564,8 @@ static const struct { const char *label; uint8_t picture; } item_pictures[] = {
   { "deku seed bag", GAMEPIC_BULLET_BAG }, { "bomb bag", GAMEPIC_BOMB_BAG }, { "quiver", GAMEPIC_QUIVER },
   { "wallet", GAMEPIC_WALLET }, { "business scrub seed", GAMEPIC_SCRUB_SEED },
   { "business scrub seeds", GAMEPIC_SCRUB_SEED }, { "mask slot", GAMEPIC_MASK_KEATON },
-  { "amiibo mask", GAMEPIC_MASK_FAIRY_KID },
+  { "amiibo mask", GAMEPIC_MASK_FAIRY_KID }, { "child trade item", GAMEPIC_WEIRD_EGG },
+  { "adult trade item", GAMEPIC_POCKET_EGG },
 };
 
 static bool same_text(const char *a, const char *b)
@@ -711,6 +712,17 @@ static bool replace_on_item_buttons(const uint32_t *old_items, int n_old, uint32
 /* Trade slots and masks: one item at a time; trading switches an item button holding the old one.
  * it->data: the slot's items (pouch_one_t), it->data2: how many. Choice 0 is "none". */
 static const char *trade_names[2][MAX_CHOICES]; /* [0] child, [1] adult */
+/* ... each choice's picture (choice_pictures; "none": nothing, its room kept), by the item's name */
+static uint8_t trade_pictures[2][MAX_CHOICES];
+static const struct { const char *item; uint8_t picture; } trade_item_pictures[] = {
+  { "Item_WeirdEgg", GAMEPIC_WEIRD_EGG }, { "Item_AlarmCucco", GAMEPIC_CUCCO },
+  { "Item_ZeldaLetter", GAMEPIC_ZELDA_LETTER }, { "Item_PocketEgg", GAMEPIC_POCKET_EGG },
+  { "Item_PocketCucco", GAMEPIC_POCKET_CUCCO }, { "Item_CojiroCucco", GAMEPIC_COJIRO },
+  { "Item_OddMushroom", GAMEPIC_ODD_MUSHROOM }, { "Item_OddPowder", GAMEPIC_ODD_POTION },
+  { "Item_PoacherSaw", GAMEPIC_POACHER_SAW }, { "Item_BrokenSword", GAMEPIC_BROKEN_SWORD },
+  { "Item_Prescription", GAMEPIC_PRESCRIPTION }, { "Item_EyeballFrog", GAMEPIC_EYEBALL_FROG },
+  { "Item_EyeDrop", GAMEPIC_EYE_DROPS }, { "Item_ClaimCheck", GAMEPIC_CLAIM_CHECK },
+};
 static const char *mask_names[MAX_CHOICES], *amiibo_mask_names[MAX_CHOICES];
 
 static int get_trade(menu_item_t *it)
@@ -956,6 +968,15 @@ static void set_defense(menu_item_t *it, bool on)
 
 /* it->data: the bottle (data_bottles); choice 0 is "none", then data_bottle_names */
 static const char *bottle_choices[MAX_CHOICES];
+/* each choice's picture, as the bottle's own (choice_pictures): "none" shows the empty bottle */
+static uint8_t bottle_pictures[MAX_CHOICES];
+static const struct { const char *name; uint8_t picture; } bottle_content_pictures[] = {
+  { "empty", GAMEPIC_BOTTLE }, { "red potion", GAMEPIC_BOTTLE_RED_POTION },
+  { "green potion", GAMEPIC_POTION_GREEN }, { "blue potion", GAMEPIC_BOTTLE_BLUE_POTION },
+  { "blue fire", GAMEPIC_BOTTLE_BLUE_FIRE }, { "fish", GAMEPIC_BOTTLE_FISH }, { "letter", GAMEPIC_BOTTLE_LETTER },
+  { "big poe", GAMEPIC_BOTTLE_BIG_POE }, { "poe", GAMEPIC_BOTTLE_POE }, { "bug", GAMEPIC_BOTTLE_BUG },
+  { "fairy", GAMEPIC_BOTTLE_FAIRY }, { "max milk", GAMEPIC_BOTTLE_MILK }, { "half milk", GAMEPIC_BOTTLE_HALF_MILK },
+};
 
 static int get_bottle(menu_item_t *it)
 {
@@ -1021,7 +1042,7 @@ static menu_item_t *add_flag(menu_t *menu, const flag_t *flag, uintptr_t refresh
 #define MAX_SMALL_KEYS 9
 
 static menu_t m_inventory, m_items, m_child_items, m_adult_items, m_universal, m_ammo, m_equipment, m_collection,
-  m_capacity, m_magic, m_quest, m_songs, m_dungeon_items, m_dungeon[MAX_DUNGEONS];
+  m_magic, m_quest, m_songs, m_dungeon_items, m_dungeon[MAX_DUNGEONS];
 
 /* An item by its data label (data_items, then data_gear). */
 static const inv_item_t *find_item(const char *label)
@@ -1056,8 +1077,10 @@ static void add_item(menu_t *menu, const char *shown, const char *label)
       int n_items = adult ? data_n_trade_adult : data_n_trade_child;
       menu_item_t *trade = menu_add_option(menu, shown, n_items + 1, trade_names[adult], get_trade, set_trade,
                                            (intptr_t)(adult ? data_trade_adult : data_trade_child));
-      if (trade)
+      if (trade) {
         trade->data2 = n_items;
+        trade->choice_pictures = trade_pictures[adult]; /* the picture follows the item held */
+      }
       break;
     }
     case IK_OCARINA:
@@ -1099,8 +1122,14 @@ static void build_items(void)
   menu_add_return(&m_adult_items);
 
   bottle_choices[0] = "none";
-  for (int i = 0; i < data_n_bottle_contents && i < MAX_CHOICES - 1; i++)
+  bottle_pictures[0] = GAMEPIC_BOTTLE;
+  for (int i = 0; i < data_n_bottle_contents && i < MAX_CHOICES - 1; i++) {
     bottle_choices[i + 1] = data_bottle_names[i];
+    bottle_pictures[i + 1] = GAMEPIC_BOTTLE; /* contents without a picture of their own: the bottle */
+    for (unsigned k = 0; k < ARRAY_LEN(bottle_content_pictures); k++)
+      if (same_text(data_bottle_names[i], bottle_content_pictures[k].name))
+        bottle_pictures[i + 1] = bottle_content_pictures[k].picture;
+  }
   static const char *const bottle_labels[] = { "bottle a", "bottle b", "bottle c", "bottle d", "bottle e" };
   menu_init(&m_universal, "universal", 15);
   add_item(&m_universal, "bombs", "bombs");
@@ -1110,9 +1139,12 @@ static void build_items(void)
   add_item(&m_universal, "farore's wind", "farore's wind");
   add_item(&m_universal, "nayru's love", "nayru's love");
   add_item(&m_universal, "ocarina", "ocarina");
-  for (int bottle = 0; bottle < ARRAY_LEN(bottle_labels); bottle++)
-    menu_add_option(&m_universal, bottle_labels[bottle], data_n_bottle_contents + 1, bottle_choices, get_bottle,
-                    set_bottle, bottle);
+  for (int bottle = 0; bottle < ARRAY_LEN(bottle_labels); bottle++) {
+    menu_item_t *item = menu_add_option(&m_universal, bottle_labels[bottle], data_n_bottle_contents + 1,
+                                         bottle_choices, get_bottle, set_bottle, bottle);
+    if (item)
+      item->choice_pictures = bottle_pictures; /* the picture follows what's in it (add_pictures gives the bottle) */
+  }
   menu_item_t *seed = menu_add_check(&m_universal, "business scrub seed", get_scrub_seed, set_scrub_seed, 0);
   if (seed)
     seed->log_label = "business scrub seed:";
@@ -1149,7 +1181,7 @@ static void build_equipment(void)
       big_sword->data2 = ARRAY_LEN(big_swords);
   }
   menu_add_heading(&m_equipment, "shields");
-  add_item(&m_equipment, "kokiri shield", "deku shield"); /* the game's Weapon_Shield_Deku */
+  add_item(&m_equipment, "deku shield", "deku shield");
   add_item(&m_equipment, "hylian shield", "hylian shield");
   add_item(&m_equipment, "mirror shield", "mirror shield");
   menu_add_heading(&m_equipment, "tunics");
@@ -1181,30 +1213,30 @@ static void add_upgrade(menu_t *menu, const char *label, upgrade_t upgrade)
 
 static void build_collection(void)
 {
-  menu_init(&m_collection, "collection", 15);
-  /* checkboxes, then strength, then the switches and numbers */
+  menu_init(&m_collection, "collection", 21);
+  /* quest items, strength, upgrades (the scale, the bags' and wallet's sizes), the great fairies' upgrades, then
+   * the tokens */
+  menu_add_heading(&m_collection, "quest rewards");
   add_item(&m_collection, "fairy ocarina", "fairy ocarina"); /* owned flag: the collection screen */
   add_item(&m_collection, "ocarina of time", "ocarina of time");
   add_item(&m_collection, "gerudo card", "gerudo membership card");
-  menu_add_check(&m_collection, "double defense", get_defense, set_defense, 0);
-  menu_add_heading(&m_collection, "strength");
+  menu_add_heading(&m_collection, "strength upgrades");
   menu_add_check(&m_collection, "goron's bracelet", get_bracelet, set_bracelet, 0);
   add_upgrade(&m_collection, "gauntlets", UPG_GAUNTLETS);
-  menu_add_heading(&m_collection, "other");
+  menu_add_heading(&m_collection, "capacity upgrades");
   add_upgrade(&m_collection, "scale", UPG_SCALE);
+  for (int upgrade = UPG_STICK; upgrade <= UPG_WALLET; upgrade++)
+    add_upgrade(&m_collection, upgrades[upgrade].name, upgrade);
+  menu_add_heading(&m_collection, "fairy upgrades");
+  menu_add_check(&m_collection, "double defense", get_defense, set_defense, 0);
+  menu_add_submenu(&m_collection, "magic", &m_magic);
+  menu_add_heading(&m_collection, "collectibles");
   menu_item_t *skulltulas = menu_add_number(&m_collection, "skulltulas", get_number, set_skulltulas, max_from_data2,
                                             0, (intptr_t)&data_skulltulas);
   if (skulltulas)
     skulltulas->data2 = MAX_SKULLTULAS;
-  menu_add_submenu(&m_collection, "ammo capacity", &m_capacity);
-  menu_add_submenu(&m_collection, "magic", &m_magic);
   menu_end_group(&m_collection);
   menu_add_return(&m_collection);
-
-  menu_init(&m_capacity, "ammo capacity", 7);
-  for (int upgrade = UPG_STICK; upgrade <= UPG_WALLET; upgrade++)
-    add_upgrade(&m_capacity, upgrades[upgrade].name, upgrade);
-  menu_add_return(&m_capacity);
 
   menu_init(&m_magic, "magic", 4);
   menu_item_t *magic = menu_add_number(&m_magic, "magic", get_magic, set_magic, max_magic, fill_magic, 0);
@@ -1290,10 +1322,16 @@ static void build_inventory(void)
 
   trade_names[0][0] = "none";
   trade_names[1][0] = "none";
-  for (int i = 0; i < data_n_trade_child; i++)
-    trade_names[0][i + 1] = data_trade_child[i].label;
-  for (int i = 0; i < data_n_trade_adult; i++)
-    trade_names[1][i + 1] = data_trade_adult[i].label;
+  for (int adult = 0; adult < 2; adult++) {
+    const pouch_one_t *items = adult ? data_trade_adult : data_trade_child;
+    int n = adult ? data_n_trade_adult : data_n_trade_child;
+    for (int i = 0; i < n && i < MAX_CHOICES - 1; i++) {
+      trade_names[adult][i + 1] = items[i].label;
+      for (unsigned k = 0; k < ARRAY_LEN(trade_item_pictures); k++)
+        if (same_text(items[i].item, trade_item_pictures[k].item))
+          trade_pictures[adult][i + 1] = trade_item_pictures[k].picture;
+    }
+  }
 
   /* the order matters: menu_init reserves each menu's items from one shared pool */
   build_items();
@@ -1303,7 +1341,7 @@ static void build_inventory(void)
   build_quest_and_songs();
   build_dungeon_items();
   menu_t *pictured[] = { &m_child_items, &m_adult_items, &m_universal, &m_ammo, &m_equipment, &m_collection,
-                         &m_capacity, &m_magic };
+                         &m_magic };
   for (unsigned i = 0; i < ARRAY_LEN(pictured); i++)
     add_pictures(pictured[i]);
 }
@@ -1316,7 +1354,7 @@ static menu_t m_equips;
 static const struct { const char *game, *shown; } worn_names[] = {
   { "Weapon_Sword_Kokiri", "kokiri sword" }, { "Weapon_Sword_Master", "master sword" },
   { "Weapon_Sword_Giant", "giant's knife" }, { "Weapon_Sword_BrokenGiant", "broken giant's knife" },
-  { "Weapon_Sword_Biggoron", "biggoron's sword" }, { "Weapon_Shield_Deku", "kokiri shield" },
+  { "Weapon_Sword_Biggoron", "biggoron's sword" }, { "Weapon_Shield_Deku", "deku shield" },
   { "Weapon_Shield_Hylian", "hylian shield" }, { "Weapon_Shield_Mirror", "mirror shield" },
   { "Armor_Adult_Goron", "goron tunic" }, { "Armor_Adult_Zora", "zora tunic" },
   { "Armor_Adult_HeavyBoot", "iron boots" }, { "Armor_Adult_HoverBoot", "hover boots" },
@@ -1574,7 +1612,7 @@ static void act_lag_reset(menu_item_t *it)
 
 static void act_js_height_reset(menu_item_t *it)
 {
-  gfx_notice(js_height_reset() ? "JS Height reset to maximum" : "JS Height unavailable or read-only");
+  gfx_notice(js_height_reset() ? "jump height reset to maximum" : "jump height unavailable or read-only");
 }
 
 static bool get_js_height_lock(menu_item_t *it) { return js_height_lock; }
@@ -1582,7 +1620,7 @@ static void set_js_height_lock(menu_item_t *it, bool on)
 {
   js_height_lock = on;
   if (on && !js_height_reset())
-    gfx_notice("JS Height lock: waiting for writable player");
+    gfx_notice("jump height lock: waiting for writable player");
 }
 
 /* A row of the list, gz's buttons: the red cross (remove); the wrench (show the value in debug >
@@ -1998,11 +2036,11 @@ static void fill_watches(void)
   menu_add_heading(&m_watches, "watches");
   add_watch_rows();
   add_watch_tools(on_tools, tools_part);
-  menu_add_heading(&m_watches, "JS Height");
-  menu_item_t *reset_js = menu_add_action(&m_watches, "Reset JS Height", act_js_height_reset, 0);
+  menu_add_heading(&m_watches, "jump height");
+  menu_item_t *reset_js = menu_add_action(&m_watches, "reset jump height", act_js_height_reset, 0);
   if (reset_js)
     reset_js->hint = "L: set the threshold to maximum once (also R + A + d-right)";
-  menu_item_t *lock_js = menu_add_check(&m_watches, "Lock JS Height", get_js_height_lock, set_js_height_lock, 0);
+  menu_item_t *lock_js = menu_add_check(&m_watches, "lock jump height", get_js_height_lock, set_js_height_lock, 0);
   if (lock_js)
     lock_js->hint = "Keep maximum height each frame; off after restarting";
   menu_add_heading(&m_watches, "timer");
@@ -2052,6 +2090,26 @@ static bool get_air_walls_shown(menu_item_t *it)
 static void set_air_walls_shown(menu_item_t *it, bool on)
 {
   airwalls_shown = on;
+}
+
+static bool get_air_walls_push(menu_item_t *it)
+{
+  return airwalls_push;
+}
+
+static void set_air_walls_push(menu_item_t *it, bool on)
+{
+  airwalls_push = on;
+}
+
+static bool get_air_walls_block(menu_item_t *it)
+{
+  return airwalls_block;
+}
+
+static void set_air_walls_block(menu_item_t *it, bool on)
+{
+  airwalls_block = on;
 }
 
 static bool get_air_walls_all(menu_item_t *it)
@@ -2110,44 +2168,63 @@ static void text_air_wall_link(menu_item_t *it, char *buf, int len)
 
 static void build_scene(void)
 {
-  menu_init(&m_scene, "scene", 5);
+  menu_init(&m_scene, "scene", 7);
   menu_item_t *reload = menu_add_action(&m_scene, "reload map", act_reload_map, 0);
   if (reload)
     reload->hint = "L: reload this map (at the age set in the link menu)";
-  menu_add_submenu(&m_scene, "collision", &m_collision);
-  menu_item_t *enemy_hp = menu_add_check(&m_scene, "enemy health", get_enemy_hp, set_enemy_hp, 0);
+  menu_add_heading(&m_scene, "collision");
+  menu_add_submenu(&m_scene, "environment", &m_collision);
+  menu_add_heading(&m_scene, "enemies");
+  menu_item_t *enemy_hp = menu_add_check(&m_scene, "display enemy health", get_enemy_hp, set_enemy_hp, 0);
   if (enemy_hp) {
     enemy_hp->hint = "a bar and life/max over each enemy";
     enemy_hp->log_label = "enemy health:";
   }
-  menu_item_t *hp_xray = menu_add_check(&m_scene, "through walls", get_enemy_hp_xray, set_enemy_hp_xray, 0);
+  menu_item_t *hp_xray = menu_add_check(&m_scene, "display through walls", get_enemy_hp_xray, set_enemy_hp_xray, 0);
   if (hp_xray) {
     hp_xray->hint = "also the bars of enemies behind the scenery (the game's style)";
     hp_xray->log_label = "enemy health through walls:";
-    hp_xray->indent = 1;
+    hp_xray->indent = 2; /* under enemy health */
   }
   menu_add_return(&m_scene);
 
-  menu_init(&m_collision, "collision", 7);
+  menu_init(&m_collision, "environment", 9);
   menu_add_heading(&m_collision, "air walls");
   menu_item_t *show = menu_add_check(&m_collision, "show", get_air_walls_shown, set_air_walls_shown, 0);
   if (show) {
-    show->hint = "cyan: stop Link   red: he's inside it   violet: other kinds";
+    show->hint = "the kinds ticked under it   red: link is inside it";
     show->log_label = "air walls:";
   }
-  menu_item_t *all_kinds = menu_add_check(&m_collision, "all kinds", get_air_walls_all, set_air_walls_all, 0);
+  /* show's options, nested under it */
+  menu_item_t *push = menu_add_check(&m_collision, "that push link back", get_air_walls_push, set_air_walls_push, 0);
+  if (push) {
+    push->hint = "amber: he can't stand on them and is pushed off (forest temple ledge)";
+    push->log_label = "air walls that push link back:";
+    push->indent = 2;
+  }
+  menu_item_t *block = menu_add_check(&m_collision, "that stop link", get_air_walls_block, set_air_walls_block, 0);
+  if (block) {
+    block->hint = "cyan: invisible walls he can't go through (rocks in the lost woods)";
+    block->log_label = "air walls that stop link:";
+    block->indent = 2;
+  }
+  menu_item_t *all_kinds = menu_add_check(&m_collision, "other kinds", get_air_walls_all, set_air_walls_all, 0);
   if (all_kinds) {
-    all_kinds->hint = "also the walls for enemies, NPCs and objects";
-    all_kinds->log_label = "all kinds:";
+    all_kinds->hint = "violet: walls for enemies, NPCs, animals, Epona, the camera, climbing";
+    all_kinds->log_label = "other air walls:";
+    all_kinds->indent = 2;
   }
-  menu_item_t *xray = menu_add_check(&m_collision, "through Link", get_air_walls_xray, set_air_walls_xray, 0);
+  menu_item_t *xray = menu_add_check(&m_collision, "through link", get_air_walls_xray, set_air_walls_xray, 0);
   if (xray) {
-    xray->hint = "also where Link is in front of them (the game's style)";
-    xray->log_label = "air walls through Link:";
+    xray->hint = "also where link is in front of them (the game's style)";
+    xray->log_label = "air walls through link:";
+    xray->indent = 2;
   }
+  menu_add_return(&m_collision);
+  /* the map's walls and link's: under the list, not part of it */
   menu_add_text(&m_collision, text_air_wall_summary, 0);
   menu_add_text(&m_collision, text_air_wall_link, 0);
-  menu_add_return(&m_collision);
+  m_collision.footer = 2;
 }
 
 /* --- settings --------------------------------------------------------------------------------- */

@@ -37,7 +37,8 @@ struct menu_item {
                                                         a checkbox's can end in ':' ("air walls: on");
                                                         "": not logged */
   intptr_t data, data2;
-  uint8_t indent;                                    /* under a heading: drawn MENU_INDENT columns in */
+  uint8_t indent;                                    /* under a heading: drawn MENU_INDENT columns in; 2: also
+                                                        under the item before it (its options), twice that */
   char icon;                                         /* a GFX_ICON_* shown before the line, or 0 */
   uint8_t picture;                                   /* the game's style: the game's picture of the item
                                                         (gameimage.h's GAMEPIC_*) before its label, or 0 */
@@ -74,6 +75,8 @@ struct menu {
   bool grouping; /* items added now go under the last heading */
   bool scroll_text; /* a page of text: d-up/down scroll it, L presses the selected item (return) */
   int pinned;       /* the first this many items always show at the top; the rest scroll under them */
+  int footer;       /* the last this many items (read-only lines) show under the list, a gap above them: not
+                       part of it (they don't scroll, and the scroll bar is the list's), above the hint */
 };
 
 /* Items come from one shared pool; `cap` reserves that many for this menu. */

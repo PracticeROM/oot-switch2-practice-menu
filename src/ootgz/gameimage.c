@@ -102,7 +102,21 @@ static const char *const names[GAMEIMAGES] = {
   [GAMEPIC_MASK_ZORA] = "Armor_Child_Mask_Zora", [GAMEPIC_MASK_GERUDO] = "Armor_Child_Mask_Gerudo",
   [GAMEPIC_MASK_TRUTH] = "Armor_Child_Mask_Truth", [GAMEPIC_MASK_FAIRY_KID] = "Armor_Child_Mask_Amiibo0",
   [GAMEPIC_MASK_PRINCESS] = "Armor_Child_Mask_Amiibo1",
+  [GAMEPIC_BOTTLE_RED_POTION] = "Item_Bottle_RedPotion", [GAMEPIC_BOTTLE_BLUE_POTION] = "Item_Bottle_BluePotion",
+  [GAMEPIC_BOTTLE_BLUE_FIRE] = "Item_Bottle_BlueFire", [GAMEPIC_BOTTLE_FISH] = "Item_Bottle_Fish",
+  [GAMEPIC_BOTTLE_LETTER] = "Item_Bottle_Letter", [GAMEPIC_BOTTLE_BIG_POE] = "Item_Bottle_BigPoe",
+  [GAMEPIC_BOTTLE_POE] = "Item_Bottle_Poe", [GAMEPIC_BOTTLE_BUG] = "Item_Bottle_Bug",
+  [GAMEPIC_BOTTLE_FAIRY] = "Item_Bottle_Fairy", [GAMEPIC_BOTTLE_MILK] = "Item_Bottle_Milk",
+  [GAMEPIC_BOTTLE_HALF_MILK] = "Item_Bottle_HalfMilk",
+  [GAMEPIC_WEIRD_EGG] = "Item_WeirdEgg", [GAMEPIC_CUCCO] = "Item_AlarmCucco",
+  [GAMEPIC_ZELDA_LETTER] = "Item_ZeldaLetter", [GAMEPIC_POCKET_EGG] = "Item_PocketEgg",
+  [GAMEPIC_POCKET_CUCCO] = "Item_PocketCucco", [GAMEPIC_COJIRO] = "Item_CojiroCucco",
+  [GAMEPIC_ODD_MUSHROOM] = "Item_OddMushroom", [GAMEPIC_ODD_POTION] = "Item_OddPowder",
+  [GAMEPIC_POACHER_SAW] = "Item_PoacherSaw", [GAMEPIC_BROKEN_SWORD] = "Item_BrokenSword",
+  [GAMEPIC_PRESCRIPTION] = "Item_Prescription", [GAMEPIC_EYEBALL_FROG] = "Item_EyeballFrog",
+  [GAMEPIC_EYE_DROPS] = "Item_EyeDrop", [GAMEPIC_CLAIM_CHECK] = "Item_ClaimCheck",
 };
+_Static_assert(GAMEIMAGES <= GFX_PICTURE_MAX, "each picture a number in the menu's text (gfx.h GFX_PICTURE_ID)");
 
 /* what's under way, one thing at a time: the shared archive's pictures [0, GAMEIMAGES_SHARED) read from
  * the cache or decoded, the icons read from the cache or decoded one file each, a cache file written */

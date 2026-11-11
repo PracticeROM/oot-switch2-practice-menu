@@ -7,13 +7,15 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-extern bool airwalls_shown; /* draw them */
-extern bool airwalls_all;   /* also the kinds that don't stop Link (enemies, sight, objects) */
+extern bool airwalls_shown; /* draw them: the kinds below that are on */
+extern bool airwalls_push;  /* the ones that push Link off (he can't stand on them) */
+extern bool airwalls_block; /* the ones that stop him (invisible walls) */
+extern bool airwalls_all;   /* the kinds that don't touch Link on foot (enemies, NPCs, animals, camera...) */
 extern bool airwalls_xray;  /* also where Link is in front of them (else hidden behind him) */
 
 /* a piece of an outline: a rectangle of the visible picture, 0..65535 each way, colour index. A side
  * thinner than the line width (a dot, or a straight piece of a line) is widened to it when drawn. */
-enum { AW_BLOCKS, AW_INSIDE, AW_OTHER, AW_NCOLORS };
+enum { AW_BLOCKS, AW_INSIDE, AW_OTHER, AW_PUSHES, AW_NCOLORS };
 typedef struct { uint16_t x0, y0, x1, y1; uint8_t color; } aw_dot_t;
 
 /* the same outlines as lines, for the GPU (the game's style): ends 0..1 across the visible picture, the

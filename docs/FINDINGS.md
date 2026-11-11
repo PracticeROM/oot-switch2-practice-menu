@@ -361,9 +361,27 @@ Objects:
   SARC). Each placed actor whose name contains `AirWall` has `Translate`, `Rotate` (radians, X Y Z; applied as
   Rz Ry Rx like sead's makeR) and `Scale`. Its shape comes from the pack: PhysicsParam `ControllerSetPath` →
   ControllerSetParam `ShapeNamePathAry` (follow `$parent`) → ShapeParam `Box` (Center + OffsetTranslation,
-  HalfExtents) or `Cylinder` (CenterA, CenterB, Radius). What it stops is the RigidBodyEntityParam
-  `EnableLayerHitMask`: `HitOnlyPlayer`, `Default` or none stop Link. `HitOnlyCharacter` walls (1565 of them,
-  `AirWallEnemy*`) are for enemies and NPCs. 3504 walls in 71 maps; 236 Polytope/PhshMesh/Cone shapes are left out.
+  HalfExtents) or `Cylinder` (CenterA, CenterB, Radius). 3504 walls in 71 maps; 236 Polytope/PhshMesh/Cone shapes
+  are left out.
+- **What a wall does to Link** comes from the collision filter in `Phive/Config/PhiveConfig.byml` (in
+  `romfs/Pack/Bootup.Nin_Ounce_NVN2.pack.zs`), not the rigid body's mask alone. A shape's layer hit mask is the
+  RigidBodyEntityParam `EnableLayerHitMask` (none = `HitAll`) ANDed with each of its `MaterialPresets`'
+  `LayerHitMaskEntity`; its sub-layer hit mask likewise from `EnableSubLayerHitMask` and the presets'
+  `SubLayerHitMaskEntity` (masks by name in `LayerHitMaskEntityCollection` / `SubLayerHitMaskEntityCollection`,
+  bit n = entry n of `LayerEntityCollection` / `SubLayerEntityCollection`). Link on foot is layer `Player`,
+  sub-layer `Unspecified` (Player_Base `CharacterMatterRigidBodyParam/Player`); climbing he's `ClimbingPlayer`.
+  - It stops him if both masks have his bits: 1067 walls. Those whose presets carry the `Unridable` shape tag push
+    him off, as he can't stand on them: 246 (`FldObj_AirWall_Player_Unridable`, the moving `PushAirWall_Box`); the
+    ledge in front of the Forest Temple (SacredForestMeadow_Child, A and B below) is one. The other 821 are plain
+    invisible walls (`FldObj_AirWall_Player`, `_Cylinder`, `_GenerateNavMesh`, `Common_Cube`, `All`, `Base`,
+    `NoHitFootStep_Cube`, `ExcludeNpc*`, `HitBomb_Cube`), e.g. round the rocks in the Lost Woods.
+  - The rest don't touch him on foot, whatever their mask: `HitOnlyCharacter` walls (enemies, NPCs, the doors'
+    `PushAirWall_DoorFront`), `Material_AirWall_ForCamera` (`HitOnlyCameraBodyAndSight`), and walls with no mask
+    whose rigid body or presets leave out `Unspecified`: the animal, cucco, horse, rolling rock, hookshot, bomb and
+    hiding hole walls. `FldObj_AirWall_ClimbPlayer` (`AirWallForClimb`, sub-layer `ClimbingPlayer` only) stops him
+    only while he climbs.
+  - `tools/airwalls.py` stores this as each wall's `"link"` (`push`, `block` or null); the menu shows each kind
+    on its own (scene > environment).
 - **romfs `.zs` files** use zstd dictionaries from `romfs/Pack/ZsDic.pack.zs` (a zstd SARC): `bcett.byml.zsdic`
   for layouts, `pack.zsdic` for packs, `zs.zsdic` otherwise (`tools/gamefiles.py`).
 - **`FldObj_AirWall_Player_Unridable`:** a 4 x 4 x 4 box sitting on its origin (centre +2 up), scaled per
@@ -388,7 +406,7 @@ Objects:
 - **The view** (scene > collision > show air walls): `airwall.py` projects every wall within 60 units with that camera onto a
   pair of see-through click-through windows over the picture: front faces filled on one at the "wall opacity" setting (scene > collision) (default 15%; Tk's `-alpha` and `-transparentcolor` work together), outlines on the other
   at 85% (back edges dashed). Redrawn up to 60 times a second. Cyan = stops Link, red = Link's inside it, violet
-  = other kinds. Walls further from the camera than Link get his silhouette cut out (a capsule from his feet,
+  = other kinds. (The native view adds amber for the walls that push him off.) Walls further from the camera than Link get his silhouette cut out (a capsule from his feet,
   `airwall.LINK_SIZE` by age from the map name, filled with the key colour), so he stays in front of them.
   - **Accuracy:** checked against a screen recording while panning (`pan` capture, 160 frames). Link's feet
     project onto his feet in every frame, still or at 95 degrees/s, and the picture trails the camera data by only

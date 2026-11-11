@@ -68,7 +68,7 @@ With the menu closed:
 | **R + A + D-pad left** | Start / stop the timer |
 | **R + B + D-pad left** | Reset the timer |
 | **R + B + D-pad right** | Reset the lag counter |
-| **R + A + D-pad right** | Reset **JS Height** to FLT_MAX (as after a load: the jumpslash then works at any height) |
+| **R + A + D-pad right** | Reset **jump height** to FLT_MAX (as after a load: the jumpslash then works at any height) |
 | **R + D-pad up** | Save position: where Link is and which way he faces |
 | **R + D-pad down** | Load position: put Link back there (same map only) |
 | **L3** | Levitate on / off (if enabled, [2.10.2](#2102-levitate)) |
@@ -109,21 +109,25 @@ and you'll come out at the chosen place. Under **return**: the **current** map a
 | Item | What it does |
 |---|---|
 | **reload map** | Reloads the current map (at the age set in **link**). |
-| **collision** | See below. |
-| **enemy health** | A bar with **life/max** over each living enemy within 30 m of Link (red under a quarter); it goes when the enemy reaches 0. Enemies that haven't appeared yet (Wolfos still in the ground, Stalfos before they drop) have none, and none are drawn while the game is paused. In the game's style a bar fades out while its enemy is hidden behind walls or other scenery. |
-| **through walls** | Also show the bars of enemies hidden behind the scenery (the game's style). |
+| *collision* | |
+| **environment** | See below. |
+| *enemies* | |
+| **display enemy health** | A bar with **life/max** over each living enemy within 30 m of Link (red under a quarter); it goes when the enemy reaches 0. Enemies that haven't appeared yet (Wolfos still in the ground, Stalfos before they drop) have none, and none are drawn while the game is paused. In the game's style a bar fades out while its enemy is hidden behind walls or other scenery. |
+| **display through walls** | Also show the bars of enemies hidden behind the scenery (the game's style). Indented under **display enemy health**. |
 
-#### 2.3.1 Collision
+#### 2.3.1 Environment
 
 **air walls**: the map's invisible walls, drawn as outlines over the game.
 
 | Item | What it does |
 |---|---|
-| **show** | Draw them. **Cyan**: walls that stop Link. **Red**: a wall Link is inside. **Violet**: other kinds. |
-| **all kinds** | Also draw the walls meant for enemies, NPCs and objects. |
-| **through Link** | Also draw them where Link is in front of them (in the game's style they're hidden behind him). |
+| **show** | Draw the kinds ticked under it (its options, indented below it). **Red**: a wall Link is inside, whatever its kind. |
+| **that push link back** | **Amber**: walls Link can't stand on, so he's pushed back off them (the ledge in front of the Forest Temple in Sacred Forest Meadow as a child). On by default. |
+| **that stop link** | **Cyan**: invisible walls he can't go through (round the rocks in the Lost Woods). On by default. |
+| **other kinds** | **Violet**: walls that don't touch Link on foot: those for enemies, NPCs, animals, Epona, the camera, bombs and the hookshot, and those that only stop him while he climbs. |
+| **through link** | Also draw them where Link is in front of them (in the game's style they're hidden behind him). |
 
-The two lines under them count the walls in this map and those near you, and say whether Link is inside one
+The two lines under the menu, below **return** and apart from its options, count the walls in this map and those near you, and say whether Link is inside one
 (how deep, and which way the game will push him out). Outlines show through the scenery; in the game's style
 Link stays in front of them.
 
@@ -134,8 +138,8 @@ business scrub seeds (30): each kept full while ticked.
 
 **player**: **2x movement speed** makes Link move twice as far each frame. **walk through walls**: hold the stick
 against a wall, rock or air wall and Link walks on through it at the height he was at, until you let go of the stick
-or turn it. While floating, levitate's own **through walls** setting applies instead. (To keep JS Height at its
-maximum, see **watches > Lock JS Height**.)
+or turn it. While floating, levitate's own **through walls** setting applies instead. (To keep jump height at its
+maximum, see **watches > lock jump height**.)
 
 ### 2.5 Inventory
 
@@ -144,7 +148,7 @@ maximum, see **watches > Lock JS Height**.)
 | **items** | **child items** (deku sticks, boomerang, fairy slingshot, magic beans, child trade item), **adult items** (fairy bow, megaton hammer, fire / ice / light arrow, the **hookshot** switch: none / hookshot / longshot, adult trade item), **universal** (bombs, bombchus, deku nuts, Din's fire, Farore's wind, Nayru's love, ocarina, bottles A to E, business scrub seed). |
 | **ammo** | How much of each kind of ammo you carry, up to your bag's size. **L** fills it. |
 | **equipment items** | **swords** (kokiri, master, and the **big sword** switch: none / giant's knife / broken giant's knife / biggoron's sword), **shields** (kokiri, hylian, mirror), **tunics** (goron, zora), **boots** (iron, hover), **other** (lenses of truth, echo gem, **mask slot**: one of the mask shop's masks at a time, **amiibo mask**: none / fairy-kid mask / princess mask, the masks Link's and Zelda's amiibo give; in the game's style each shows the chosen mask's picture). |
-| **collection** | Fairy ocarina, ocarina of time, gerudo card, double defense; **strength** (goron's bracelet, **gauntlets**: none / silver / gold); **other** (**scale**, **skulltulas**: the tokens' count, and they show in the collection screen, **ammo capacity**: the size of each bag and the wallet, **magic**: your magic and the meter). |
+| **collection** | **quest rewards** (fairy ocarina, ocarina of time, gerudo card); **strength upgrades** (goron's bracelet, **gauntlets**: none / silver / gold); **capacity upgrades** (**scale**, and the size of each bag and the wallet: deku stick bag, deku nut bag, deku seed bag, bomb bag, quiver, wallet); **fairy upgrades** (double defense, **magic**: your magic and the meter); **collectibles** (**skulltulas**: the tokens' count, and they show in the collection screen). |
 | **quest items** | **spiritual stones** and **medallions**. |
 | **songs** | **normal songs** and **warp songs**. |
 | **dungeon items** | Per dungeon: map, compass, boss key, and **small keys** where it has them. |
@@ -189,8 +193,8 @@ row of buttons:
 Under the list:
 
 - **📁 (known watches)**: the built-in watches: x, y, z, facing, move angle, speed, y speed, camera angle /
-  pitch / distance, input, stick, lag, timer, frame, map, air wall, JS Height. Each can be in the list once.
-  **JS Height** is the height your last jump set (takeoff + 0.7; FLT_MAX until you jump after a load), which
+  pitch / distance, input, stick, lag, timer, frame, map, air wall, jump height. Each can be in the list once.
+  **jump height** is the height your last jump set (takeoff + 0.7; FLT_MAX until you jump after a load), which
   the jumpslash launch is limited to. It's always in the list (hide it to keep it off screen).
 - **+ (custom watch)**: a watch of any memory address. Type the address (D-pad left / right: digit, up / down:
   change it), **L** to add. It starts from your last memory watch, as in gz. One watch per address. Changed your
@@ -202,7 +206,7 @@ Angles: **deg**, **hex** (the game's 16-bit angle, 0x4000 = 90°), **s16**, **ra
 Timer: **m:s**, **sec**. Stick: **%**, **raw**. Memory watches: **u8 s8 x8 u16 s16 x16 u32 s32 x32 f32 x64**.
 
 **timer**: **start/stop timer**, **reset timer**, **reset lag counter** (also shortcuts,
-[1.3](#13-shortcuts-in-the-game)). **Reset JS Height** is under its own heading, below.
+[1.3](#13-shortcuts-in-the-game)). **reset jump height** is under its own heading, below.
 
 **The keyboard** (renaming): the text line at the top (D-pad left / right moves the cursor, **L** finishes), then
 rows of keys (D-pad picks a key, **L** types it) and a row of **shift**, **space**, **back**, **del** and **ok**.
@@ -210,16 +214,16 @@ rows of keys (D-pad picks a key, **L** types it) and a row of **shift**, **space
 
 Memory watches aren't saved (addresses change every time the game starts); everything else is.
 
-**JS Height** is the seventh default watch. It resolves the current player's jumpslash height
+**jump height** is the seventh default watch. It resolves the current player's jumpslash height
 threshold on each read, showing an f32 with nine significant digits, **Max** for `FLT_MAX`, or **N/A**
-if unavailable. A padlock beside its name in the HUD and Watches list indicates that **Lock JS Height**
+if unavailable. A padlock beside its name in the HUD and Watches list indicates that **lock jump height**
 is enabled. Custom names are preserved; long names are shortened on screen to leave room for the icon.
 
-Under the watch list, the **JS Height** controls change that threshold:
+Under the watch list, the **jump height** controls change that threshold:
 
-- **Reset JS Height** writes `FLT_MAX` (about `3.40282347e+38`) once (also **R + A + D-pad right**). A later jump
+- **reset jump height** writes `FLT_MAX` (about `3.40282347e+38`) once (also **R + A + D-pad right**). A later jump
   may change it again.
-- **Lock JS Height** keeps writing `FLT_MAX` on each mod frame, including while the watch or menu is
+- **lock jump height** keeps writing `FLT_MAX` on each mod frame, including while the watch or menu is
   hidden. It follows the current player across scene changes and skips unavailable or read-only memory.
   The lock is off at each game launch and is not saved. Turn it off to stop writing; the game can then
   update the threshold normally on a later jump. Turning it off does not restore an old value.
@@ -344,7 +348,7 @@ The name and version, the build date ("Build Date: ..."), and the website.
 | Log | Bottom right | What you just did; stays a second, then fades. gz's grey text with a shadow. |
 | Input display | Bottom left, or the corner you choose, or anywhere | [2.10.1](#2101-input-display); in the bottom left, it moves above the watches if they're there too. |
 | Pause icon | Top left | Two bars: paused by frame advance. |
-| Air walls | Over the game | [2.3.1](#231-collision) |
+| Air walls | Over the game | [2.3.1](#231-environment) |
 
 ## 4 About frame advance
 

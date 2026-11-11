@@ -19,7 +19,7 @@ float hypotf(float x, float y);
 
 const char *const watch_labels[W_COUNT] = {
   "x", "y", "z", "facing", "move angle", "speed", "y speed", "camera angle", "camera pitch",
-  "camera dist", "input", "stick", "lag", "timer", "frame", "map", "air wall", "js height",
+  "camera dist", "input", "stick", "lag", "timer", "frame", "map", "air wall", "jump height",
 };
 const char *const watches_corner_names[GFX_NPLACES] = { "top-left", "top-right", "bottom-left", "bottom-right",
                                                        "top-centre", "bottom-centre", "custom" };
@@ -664,13 +664,17 @@ void watch_entry_label(const watch_entry_t *entry, char *buf, int len)
     snprintf(buf, len, "%s", T(watch_labels[entry->id]));
 }
 
-/* Keep status decorations out of the editable/saved name. Fit the existing 12-cell column. */
+/* Keep status decorations out of the editable/saved name. Fit the existing 12-cell column: the padlock a space
+ * after the label, or right after one of 11 ("jump height"), cut to fit */
 void watch_entry_display_label(const watch_entry_t *e, char *buf, int len)
 {
   char label[24];
   watch_entry_label(e, label, sizeof(label));
+  int n = (int)strlen(label);
+  if (n > GFX_WATCH_LABEL_W - 1)
+    n = GFX_WATCH_LABEL_W - 1;
   if (e->id == W_JS_HEIGHT && js_height_lock)
-    snprintf(buf, len, "%.10s %c", label, GFX_ICON_LOCK);
+    snprintf(buf, len, "%.*s%s%c", n, label, n < GFX_WATCH_LABEL_W - 1 ? " " : "", GFX_ICON_LOCK);
   else
     snprintf(buf, len, "%s", label);
 }
@@ -838,7 +842,7 @@ static void command_input(void)
     lag_reset();
     gfx_notice("lag counter reset");
   } else if (input_combo(BTN_R | BTN_A | BTN_DRIGHT)) {
-    gfx_notice(js_height_reset() ? "JS Height reset" : "JS Height: Link not found");
+    gfx_notice(js_height_reset() ? "jump height reset" : "jump height: Link not found");
   } else if (input_combo(BTN_R | BTN_DRIGHT) && !(held & (BTN_A | BTN_B))) {
     watches_shown = !watches_shown;
     gfx_notice(watches_shown ? "watches shown" : "watches hidden");

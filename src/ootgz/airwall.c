@@ -27,6 +27,7 @@ float cosf(float x);
 float sqrtf(float x);
 
 bool airwalls_shown, airwalls_all, airwalls_xray;
+bool airwalls_push = true, airwalls_block = true;
 
 #define AW_RANGE 60.0f
 #define MAX_WALLS 512
@@ -54,7 +55,9 @@ bool airwalls_shown, airwalls_all, airwalls_xray;
 #define PHYS_Y 0.585f     /* Link's physics position is this far above his drawn one */
 #define FACE_UPRIGHT 0.7f /* a face normal with more height than this points up (or down) */
 
-#define WALL_KIND_BLOCKS 0 /* the kind of wall that stops Link */
+#define WALL_KIND_BLOCKS 0 /* the kinds of wall (data.h airwall_t): stops Link */
+#define WALL_KIND_OTHER 1  /* doesn't touch him on foot */
+#define WALL_KIND_PUSHES 2 /* pushes him off */
 #define SHAPE_BOX 0        /* any other shape type is a cylinder */
 #define CYLINDER_SEGMENTS 16
 #define CYLINDER_SIDE_EVERY 4 /* a side line at every 4th segment: four in all */
@@ -81,7 +84,16 @@ static const airwall_t *map_wall(int index)
 
 static bool wall_shown(const airwall_t *wall)
 {
-  return wall->kind == WALL_KIND_BLOCKS || airwalls_all;
+  switch (wall->kind) {
+  case WALL_KIND_BLOCKS: return airwalls_block;
+  case WALL_KIND_PUSHES: return airwalls_push;
+  default:               return airwalls_all;
+  }
+}
+
+static uint8_t wall_colour(const airwall_t *wall)
+{
+  return wall->kind == WALL_KIND_BLOCKS ? AW_BLOCKS : wall->kind == WALL_KIND_PUSHES ? AW_PUSHES : AW_OTHER;
 }
 
 /* R = Rz Ry Rx for rotation angles (x, y, z) */
@@ -641,7 +653,7 @@ void airwall_frame(bool gpu)
     for (int k = 0; k < n_walls_near && (gpu ? nl < MAX_LINES : n < MAX_DOTS); k++) {
       int i = near_order[k];
       const airwall_t *wall = map_wall(i);
-      uint8_t color = i == link_wall ? AW_INSIDE : wall->kind == WALL_KIND_BLOCKS ? AW_BLOCKS : AW_OTHER;
+      uint8_t color = i == link_wall ? AW_INSIDE : wall_colour(wall);
       for (int e = wall_geo[i].first_edge; e < wall_geo[i].first_edge + wall_geo[i].n_edges; e++)
         add_edge_dots(dots[f], &n, gpu ? lines[f] : 0, &nl, &cam, points[edges[e][0]], points[edges[e][1]], color);
     }

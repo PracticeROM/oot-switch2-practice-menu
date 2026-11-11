@@ -51,6 +51,7 @@ static const gpu_colour_t line_colours[AW_NCOLORS] = {
   [AW_BLOCKS] = { 0.30f, 0.86f, 1.0f, 1 }, /* cyan: stops Link */
   [AW_INSIDE] = { 1.0f, 0.32f, 0.30f, 1 }, /* red: Link is inside it */
   [AW_OTHER] = { 0.66f, 0.58f, 1.0f, 1 },  /* violet: other kinds */
+  [AW_PUSHES] = { 1.0f, 0.78f, 0.22f, 1 }, /* amber: pushes Link off */
 };
 
 /* budget: the quads the lines may take. Short of them, the glows go first, then the farthest lines. */

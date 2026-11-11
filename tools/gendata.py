@@ -137,10 +137,10 @@ HIDDEN_SPAWNS = {"Graveyard_Adult/5", "Graveyard_Adult/6"}  # as 4: in front of 
 CATEGORIES = ["overworld (child)", "overworld (adult)", "dungeons", "boss & battle rooms", "other"]
 WC_CHILD, WC_ADULT, WC_DUNGEON, WC_BOSS, WC_OTHER = range(len(CATEGORIES))
 
-# air walls: airshape_t type, and airwall_t kind (does it stop Link?)
+# air walls: airshape_t type, and airwall_t kind (what it does to Link: airwalls.json "link", tools/airwalls.py)
 SHAPE_BOX, SHAPE_CYLINDER = 0, 1
-WALL_STOPS_PLAYER, WALL_IGNORES_PLAYER = 0, 1
-PLAYER_MASKS = {"HitOnlyPlayer", "Default", None}  # rigid-body hit masks that stop Link (airwall.py PLAYER_MASKS)
+WALL_BLOCKS, WALL_OTHER, WALL_PUSHES = 0, 1, 2
+WALL_KINDS = {"block": WALL_BLOCKS, "push": WALL_PUSHES, None: WALL_OTHER}
 
 NO_FIELD = "{ 0, FT_NONE }"
 FIELD_TYPES = {"Int": "FT_INT", "Bool": "FT_BOOL", "Enum": "FT_ENUM", "Float": "FT_FLOAT"}
@@ -501,7 +501,7 @@ def write_airwalls(out, airwall_maps):
                     a, b, radius = shape["a"], shape["b"], shape["radius"]
                 out.write(f"  {{ {shape_type}, {c_vec3(a)}, {c_vec3(b)}, {c_float(radius)} }},")
                 n_shapes += 1
-            kind = WALL_STOPS_PLAYER if wall.get("mask") in PLAYER_MASKS else WALL_IGNORES_PLAYER
+            kind = WALL_KINDS[wall["link"]]
             walls.append((wall["t"], wall["r"], wall["s"], first_shape, n_shapes - first_shape, kind))
         maps.append((name, first_wall, len(walls) - first_wall))
     out.write("};")

@@ -567,11 +567,11 @@ static float fp_px; /* screen pixels per font pixel (scale / 16) */
 #define SCROLL_W 4.5f   /* the scroll bar's width (it's in the list's first column, as the game has it left) */
 #define THUMB_W 0.55f   /* its thumb's, of that: inside the track with room round it, as the game's */
 
-/* the menu's list scrolls, and the game's scroll bar can be drawn */
+/* the menu has a list (scrolling or not: every menu shows the bar, a full thumb when it all fits), and the game's
+ * scroll bar can be drawn */
 static bool scroll_bar_shown(const gfx_panel_t *panel)
 {
-  return panel->scroll_rows && panel->scroll_items > panel->scroll_rows && gpuui_image_ready(GAMEIMAGE_SCROLL_BASE) &&
-         gpuui_image_ready(GAMEIMAGE_SCROLL_BAR);
+  return panel->scroll_rows && gpuui_image_ready(GAMEIMAGE_SCROLL_BASE) && gpuui_image_ready(GAMEIMAGE_SCROLL_BAR);
 }
 
 static bool laid_out(const gfx_panel_t *panel)
@@ -1418,8 +1418,10 @@ static bool row_setup(mrow_t *r)
   r->indent_from = r->cols;
   r->indent_shift = 0;
   if ((panel->kind[r->row] & GFX_ROW_INDENT) && !r->grid) {
+    int levels = panel->kind[r->row] & GFX_ROW_INDENT2 ? 2 : 1; /* GFX_ROW_INDENT2: under an item, a level more */
+    int from = LIST_COL + (ITEM_INDENT_COL - LIST_COL) * levels;
     r->indent_from = ITEM_INDENT_COL;
-    r->indent_shift = r->em * INDENT_EM - (float)(cell_x(ITEM_INDENT_COL, r->scale) - cell_x(LIST_COL, r->scale));
+    r->indent_shift = r->em * INDENT_EM * levels - (float)(cell_x(from, r->scale) - cell_x(LIST_COL, r->scale));
   }
 
   int first_text = -1, last_text = -1, first_sel = -1, last_sel = -1;
@@ -1791,6 +1793,10 @@ static void menu_layout(const gfx_panel_t *panel, int cols, int scale, float *va
       float label = menu_cells(&r, 0, false);
       r.cols = cols;
       float value = menu_cells(&r, from, false) - col_x(&r, from);
+      if (panel->reserve[row]) { /* a number shorter than its maximum: as wide as that */
+        const gf_glyph_t *digit = gamefont_glyph(face_at(&r, from, GFX_SELECTED), r.em, '0');
+        value += panel->reserve[row] * (digit ? digit->advance / 64.0f : r.em * 0.55f);
+      }
       labels = label > labels ? label : labels;
       values = value > values ? value : values;
       gap = r.em * 1.5f;

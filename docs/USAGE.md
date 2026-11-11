@@ -103,7 +103,7 @@ to add it. Or open **debug > memory**, find the value, edit the row (**L**) and 
 **watches > watches box > move watches position**, then the D-pad (hold it to go faster). **L** when it's in place.
 
 **...see the invisible walls?**
-**scene > collision > show**. Cyan walls stop Link; red ones are walls he's inside.
+**scene > environment > show**. Cyan walls stop Link; red ones are walls he's inside.
 
 **...float around?**
 Turn on **settings > levitate > enabled**, close the menu, press **L3**. Push the left stick to move; hold **X** to rise or **B** to descend. Release both to hover.

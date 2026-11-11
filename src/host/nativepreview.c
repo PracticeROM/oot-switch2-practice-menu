@@ -132,7 +132,7 @@ static void watches_panel(gfx_panel_t *p)
 {
   memset(p, 0, sizeof(*p));
   static const char *const rows[][2] = { { "x", "18.74" }, { "y", "189.19" }, { "z", "27.05" }, { "facing", "154.2" },
-                                         { "speed", "1.00" }, { "camera angle", "154.2" }, { "js height", "Max" } };
+                                         { "speed", "1.00" }, { "camera angle", "154.2" }, { "jump height", "Max" } };
   for (int i = 0; i < 7; i++) {
     put(p, i, 0, GFX_DIM, rows[i][0]);
     char v[16];

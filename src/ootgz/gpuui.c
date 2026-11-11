@@ -948,8 +948,8 @@ static struct {
   uint8_t *mem;
   size_t size;
   bool published;    /* game thread to render thread */
-  uint64_t filled;   /* game thread to render thread: the slots filled */
-  uint64_t up;       /* render thread: the slots brought up */
+  uint64_t filled[2]; /* game thread to render thread: the slots filled (64 a word) */
+  uint64_t up[2];     /* render thread: the slots brought up */
   enum { ICONS_NONE, ICONS_MADE, ICONS_FAILED } state;
   nvn_obj_t pool, tex;
   nvn_addr_t gpu;
@@ -967,7 +967,7 @@ void gpuui_icons_publish(uint8_t *mem, size_t size)
 void gpuui_icon_filled(int slot)
 {
   if (slot >= 0 && slot < GPU_ICON_COLS * GPU_ICON_ROWS)
-    __atomic_fetch_or(&icons.filled, 1ull << slot, __ATOMIC_RELEASE);
+    __atomic_fetch_or(&icons.filled[slot / 64], 1ull << slot % 64, __ATOMIC_RELEASE);
 }
 
 /* render thread: the atlas's texture, after its staging rows in the same pool */
@@ -1018,7 +1018,7 @@ bool gpuui_icon_ready(int slot)
   if (icons.state == ICONS_NONE)
     make_icons();
   /* drawn once it's up (gpuui_end brings up what's filled before the frame's quads are drawn) */
-  return icons.state == ICONS_MADE && (__atomic_load_n(&icons.filled, __ATOMIC_ACQUIRE) >> slot & 1);
+  return icons.state == ICONS_MADE && (__atomic_load_n(&icons.filled[slot / 64], __ATOMIC_ACQUIRE) >> slot % 64 & 1);
 }
 
 void gpuui_icon(int slot, float x, float y, float w, float h, const float part[4], gpu_colour_t colour)
@@ -1049,15 +1049,16 @@ static void icons_up(nvn_obj_t *cmd)
 {
   if (icons.state != ICONS_MADE)
     return;
-  uint64_t filled = __atomic_load_n(&icons.filled, __ATOMIC_ACQUIRE);
-  if (filled == icons.up)
+  uint64_t filled[2] = { __atomic_load_n(&icons.filled[0], __ATOMIC_ACQUIRE),
+                         __atomic_load_n(&icons.filled[1], __ATOMIC_ACQUIRE) };
+  if (filled[0] == icons.up[0] && filled[1] == icons.up[1])
     return;
   gi.pool_flush(&icons.pool, 0, ICONS_STAGING); /* written through the CPU's cache */
   g.cmd_copy_stride(cmd, 0);
   nvn_region_t all = { 0, 0, 0, ICONS_W, ICONS_H, 1 };
   g.cmd_copy_to_texture(cmd, icons.gpu, &icons.tex, 0, &all, 0);
   g.cmd_barrier(cmd, BARRIER_ORDER_PRIMITIVES | BARRIER_ORDER_FRAGMENTS | BARRIER_INVALIDATE_TEXTURE);
-  icons.up = filled;
+  icons.up[0] = filled[0], icons.up[1] = filled[1];
 }
 
 bool gpuui_image_ready(int i)

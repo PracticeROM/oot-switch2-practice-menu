@@ -21,7 +21,7 @@ typedef struct {
 } inv_item_t;
 
 /* one-off pouch items (masks, trade items): count 1 + IsGet.<item> */
-typedef struct { const char *label, *item, *button; } pouch_one_t;
+typedef struct { const char *label, *item, *button; } pouch_one_t; /* button: NULL if never on one */
 
 typedef struct { const char *label; uint32_t count, cap; int32_t fixed; uint32_t acquired; } ammo_t;
 
@@ -45,6 +45,7 @@ typedef struct { const char *name, *label; uint8_t category, dungeon; uint16_t f
 extern const inv_item_t  data_items[];       extern const int data_n_items;
 extern const inv_item_t  data_gear[];        extern const int data_n_gear;
 extern const pouch_one_t data_masks[];       extern const int data_n_masks;
+extern const pouch_one_t data_amiibo_masks[]; extern const int data_n_amiibo_masks;
 extern const pouch_one_t data_trade_child[]; extern const int data_n_trade_child;
 extern const pouch_one_t data_trade_adult[]; extern const int data_n_trade_adult;
 extern const ammo_t      data_ammo[];        extern const int data_n_ammo;

@@ -1,6 +1,6 @@
 /* The game's own pictures: its controllers (Controller_Pro, _Grip and _Console in its Common UI
  * textures) for the input display in the game's style, parts of its menus, and its items' icons. The
- * first are in a 244 MB archive (65 MB packed), the icons each in a file of their own (about 13 MB in
+ * first are in a 244 MB archive (65 MB packed), the icons each in a file of their own (about 18 MB in
  * all), so they're loaded a little each frame, from the first frame they're wanted, and handed to
  * gpuui.c as textures. Nothing of them is in this repository or the release: they're the user's own
  * files (the cache on the SD card is made from them, on the user's console). */
@@ -32,7 +32,9 @@ enum {
   GAMEPIC_GERUDO_CARD, GAMEPIC_BRACELET, GAMEPIC_GAUNTLETS, GAMEPIC_SCALE, GAMEPIC_SKULLTULA, GAMEPIC_DEFENSE,
   GAMEPIC_WALLET, GAMEPIC_BOMB_BAG, GAMEPIC_QUIVER, GAMEPIC_BULLET_BAG, GAMEPIC_STICK_BAG, GAMEPIC_NUT_BAG,
   GAMEPIC_LONGSHOT, GAMEPIC_SWORD_BROKEN, GAMEPIC_SWORD_BIGGORON, GAMEPIC_GAUNTLETS_GOLD, GAMEPIC_SCALE_GOLD,
-  GAMEPIC_MAGIC_DOUBLE, GAMEPIC_POTION_GREEN, GAMEPIC_SCRUB_SEED,
+  GAMEPIC_MAGIC_DOUBLE, GAMEPIC_POTION_GREEN, GAMEPIC_SCRUB_SEED, GAMEPIC_MASK_KEATON, GAMEPIC_MASK_SKULL,
+  GAMEPIC_MASK_SPOOKY, GAMEPIC_MASK_BUNNY, GAMEPIC_MASK_GORON, GAMEPIC_MASK_ZORA, GAMEPIC_MASK_GERUDO,
+  GAMEPIC_MASK_TRUTH, GAMEPIC_MASK_FAIRY_KID, GAMEPIC_MASK_PRINCESS,
   GAMEIMAGES
 };
 

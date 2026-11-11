@@ -141,18 +141,18 @@ Read with [KillzXGaming/ShaderLibrary](https://github.com/KillzXGaming/ShaderLib
   milliseconds each frame from start-up (about 160 MB unpacked, until the last of them; 0.37 s in all on a Mac).
   Until then the menu has its own selection band, a plain line under its title and ^ / v marks, and the input
   display its glyphs.
-- The items' icons (`UI/Tex/Icon/<name>.bntx.zs`, one ASTC 4x4 texture each, 341 to 1366 px, about 13 MB
+- The items' icons (`UI/Tex/Icon/<name>.bntx.zs`, one ASTC 4x4 texture each, 341 to 1366 px, about 18 MB
   in all) would take more of the game's heap than it has to spare (it refused them past about 11 MB). So
   `gameimage.c` decodes each as it's read (`astc.c`, the LDR part of texture2ddecoder's ASTC decoder, checked
-  pixel for pixel against it), puts its blocks in place and shrinks it to 64 px into one RGBA atlas (8 x 6
-  slots, 1.6 MB with its texture), which gpuui brings up as slots fill. The packaged layout is block linear:
+  pixel for pixel against it), puts its blocks in place and shrinks it to 64 px into one RGBA atlas (8 x 9
+  slots, 2.5 MB with its texture), which gpuui brings up as slots fill. The packaged layout is block linear:
   GOBs of 64 bytes x 8 rows, 2^layout[0] of them stacked in each column; on the Switch 2 (BNTX platform
   "Ounc") a GOB's 16-byte sectors go row bits 0-1, column bit 0, row bit 2, column bit 1 (Switch 1: row 0,
   column 0, rows 1-2, column 1), found by matching decoded blocks against the GPU's own drawing of the bomb.
   Item menus (cheats, items, equipment, collection, capacities, magic, ammo) put the picture before the
   label (`menu_item_t.picture`, `GFX_PICTURE` + its number in the line); an option of items (ocarina,
-  hookshot, big sword, gauntlets, scale, magic meter) shows the chosen one's (`choice_pictures`, "none"
-  the first's). Each picture's covered part (its alpha) is fitted inside its row, within the cursor's line; it's drawn a few times a fraction
+  hookshot, big sword, gauntlets, scale, magic meter, mask slot, amiibo mask) shows the chosen one's
+  (`choice_pictures`; "none" the first's, or nothing where its entry is 0, as the masks' are). Each picture's covered part (its alpha) is fitted inside its row, within the cursor's line; it's drawn a few times a fraction
   of a pixel apart, each at 1/k (their average), so it doesn't break up into noise.
 - Memory. The game's heap is small (FINDINGS.md 9.6), and making the pictures needs the most of it:
   - Decoding `Common.bntx` takes its 8 MiB window, 1 MiB more to slide it back and 0.6 MiB for the decoder at
@@ -165,7 +165,7 @@ Read with [KillzXGaming/ShaderLibrary](https://github.com/KillzXGaming/ShaderLib
     8 times at most. Tried again, the archive's pictures' memory is taken with its stream, and it's only
     decoded if 4 MB more are free for the game then.
   - Once made, they're kept on the SD card, `sloperinaGZ/cache/pictures-<version>.bin` (4.8 MB) and
-    `icons-<version>.bin` (0.9 MB): the pictures as they're drawn, after a header with what they were made from
+    `icons-<version>.bin` (1.2 MB): the pictures as they're drawn, after a header with what they were made from
     (this module's version, the pictures' names, the archive's size or the icon files' sizes) and a checksum,
     written last. Later starts read them (3 ms on the Mac) with no more memory than they keep. A file that
     isn't right is deleted and made afresh. The SD card's data goes through a 64 KiB buffer of the module's

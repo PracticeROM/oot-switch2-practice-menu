@@ -15,11 +15,11 @@
  * A picture that isn't there (another version of the game) is left out; the controllers are needed.
  *
  * The items' icons come after: UI/Tex/Icon/<name>.bntx.zs, each one frame (no dictionary) of a BNTX with
- * one ASTC 4x4 texture of that name (341 to 1366 pixels square, about 13 MB in all). Kept as they are they'd
+ * one ASTC 4x4 texture of that name (341 to 1366 pixels square, about 18 MB in all). Kept as they are they'd
  * take more of the game's heap than it can spare, so each is decoded as it's read (astc.c), its blocks put
  * in their places (the packaged layout: GOBs of 64 bytes x 8 rows, stacked 2^layout[0] high in each column
  * of them; on the Switch 2 a GOB's 16-byte sectors go row 0-1 / column / row 2 / column 1, found against
- * the GPU's own drawing of one), and shrunk to GPU_ICON_PX square into gpuui's icon atlas (1.6 MB).
+ * the GPU's own drawing of one), and shrunk to GPU_ICON_PX square into gpuui's icon atlas (2.5 MB).
  *
  * The game's heap is small. Decoding the archive takes about 15 MB of it for a few seconds (its 8 MiB window
  * above all, taken at the start with what the decoder needs: zstd.c), so it can't run out half way. Each
@@ -96,7 +96,12 @@ static const char *const names[GAMEIMAGES] = {
   [GAMEPIC_SWORD_BROKEN] = "Weapon_Sword_BrokenGiant", [GAMEPIC_SWORD_BIGGORON] = "Weapon_Sword_Biggoron",
   [GAMEPIC_GAUNTLETS_GOLD] = "Armor_Adult_Gauntlet_Gold", [GAMEPIC_SCALE_GOLD] = "Item_Scale_Gold",
   [GAMEPIC_MAGIC_DOUBLE] = "Item_FairyBless_MPDouble", [GAMEPIC_POTION_GREEN] = "Item_Bottle_GreenPotion",
-  [GAMEPIC_SCRUB_SEED] = "Item_ScrubBusinessSeed",
+  [GAMEPIC_SCRUB_SEED] = "Item_ScrubBusinessSeed", [GAMEPIC_MASK_KEATON] = "Armor_Child_Mask_Keaton",
+  [GAMEPIC_MASK_SKULL] = "Armor_Child_Mask_Skull", [GAMEPIC_MASK_SPOOKY] = "Armor_Child_Mask_Spooky",
+  [GAMEPIC_MASK_BUNNY] = "Armor_Child_Mask_Bunny", [GAMEPIC_MASK_GORON] = "Armor_Child_Mask_Goron",
+  [GAMEPIC_MASK_ZORA] = "Armor_Child_Mask_Zora", [GAMEPIC_MASK_GERUDO] = "Armor_Child_Mask_Gerudo",
+  [GAMEPIC_MASK_TRUTH] = "Armor_Child_Mask_Truth", [GAMEPIC_MASK_FAIRY_KID] = "Armor_Child_Mask_Amiibo0",
+  [GAMEPIC_MASK_PRINCESS] = "Armor_Child_Mask_Amiibo1",
 };
 
 /* what's under way, one thing at a time: the shared archive's pictures [0, GAMEIMAGES_SHARED) read from
@@ -134,8 +139,10 @@ static bool switch2;  /* the file's platform: the Switch 2's ("Ounc") GOB layout
 #define ICONS_STAGING ((size_t)GPU_ICON_PX * GPU_ICON_PX * ICON_SLOTS * 4) /* the atlas, as gameimage fills it */
 #define ICONS_MEM (2 * ICONS_STAGING + 0x20000)
 #define ICONS (GAMEIMAGES - GAMEIMAGES_SHARED)
-#define ALL_ICONS (ICONS == 64 ? ~0ull : (1ull << ICONS) - 1)
-_Static_assert(ICONS <= ICON_SLOTS && ICON_SLOTS <= 64, "an icon slot each, a bit each");
+typedef unsigned __int128 icon_bits_t; /* a bit per icon (and per slot) */
+#define ICON_BIT(i) ((icon_bits_t)1 << (i))
+#define ALL_ICONS (ICON_BIT(ICONS) - 1)
+_Static_assert(ICONS <= ICON_SLOTS && ICON_SLOTS < 128, "an icon slot each, a bit each");
 _Static_assert(GAMEIMAGES <= GPU_ICONS_IMAGE, "the icons' atlas after the pictures");
 static uint8_t *icons_mem;
 static int tex_w, tex_h, blocks_w, blocks_h, gobs_w, gob_h;
@@ -144,9 +151,9 @@ static int carried;
 static uint32_t sums[GPU_ICON_PX * GPU_ICON_PX][4];
 static uint16_t counts[GPU_ICON_PX * GPU_ICON_PX];
 static uint8_t boxes[ICON_SLOTS][4]; /* each icon's covered part (gameimage_icon_box), in its slot's pixels */
-static uint64_t icons_todo = ALL_ICONS; /* a bit per icon: not read yet, or to try again */
-static uint64_t icons_filled, icons_lost; /* ... in its slot; left out (not in this version, or damaged) */
-static uint64_t icons_short;              /* ... out of memory in this pass: tried again in the next */
+static icon_bits_t icons_todo = ALL_ICONS; /* a bit per icon: not read yet, or to try again */
+static icon_bits_t icons_filled, icons_lost; /* ... in its slot; left out (not in this version, or damaged) */
+static icon_bits_t icons_short;              /* ... out of memory in this pass: tried again in the next */
 #define COVERED_ALPHA 24             /* a pixel at least this opaque is part of the picture */
 static int frames;
 static uint64_t ticks, decoded;
@@ -494,7 +501,7 @@ static bool due(const part_t *part)
 }
 
 /* --- the cache: the pictures as they end up, on the SD card -----------------------------------------
- * One file each for the shared pictures (4.6 MB, as they're drawn) and for the icons' atlas (0.9 MB),
+ * One file each for the shared pictures (4.6 MB, as they're drawn) and for the icons' atlas (1.2 MB),
  * named after the game's version: a header, then the data. The header says what the file was made from
  * (key: this module's version and layout, the pictures' names, and the archive's size or the icon files'
  * sizes) and holds a checksum of it all; it's written last, so a file cut short is never taken. A file
@@ -516,7 +523,7 @@ typedef struct {
   uint64_t sum;  /* of the header (its magic and sum 0) and the data */
   gpu_image_t images[GAMEIMAGES_SHARED]; /* the shared pictures' places in the data */
   uint8_t boxes[ICON_SLOTS][4];          /* the icons' covered parts */
-  uint64_t filled;                       /* the icons' slots that have one */
+  icon_bits_t filled;                    /* the icons' slots that have one */
 } cache_head_t;
 
 enum { CACHE_SHARED, CACHE_ICONS };
@@ -867,7 +874,8 @@ static int open_icon(int k)
 static void icons_done(void)
 {
   icons.state = PART_DONE;
-  log_printf("game pictures: %d icons in %u ms over %d frames", __builtin_popcountll(icons_filled),
+  log_printf("game pictures: %d icons in %u ms over %d frames", __builtin_popcountll((uint64_t)icons_filled) +
+             __builtin_popcountll((uint64_t)(icons_filled >> 64)),
              (unsigned)(ticks * 1000 / sys_tick_freq()), frames);
 }
 
@@ -886,7 +894,7 @@ static void next_icon(int k)
 {
   task = NOTHING;
   for (; k < GAMEIMAGES; k++) {
-    uint64_t bit = 1ull << (k - GAMEIMAGES_SHARED);
+    icon_bits_t bit = ICON_BIT(k - GAMEIMAGES_SHARED);
     if (!(icons_todo & bit) || (icons_short & bit))
       continue;
     int open = open_icon(k);
@@ -925,7 +933,7 @@ static void start_icons(uint64_t start)
     if (!icons_key(start))
       return; /* the rest of the key next frame */
     if (cache_open(CACHE_ICONS)) {
-      if (cache.head.size != ICONS_STAGING || cache.head.filled & ~(uint64_t)ALL_ICONS) {
+      if (cache.head.size != ICONS_STAGING || cache.head.filled & ~ALL_ICONS) {
         cache_drop(CACHE_ICONS, "its icons aren't right");
       } else {
         ticks = 0, frames = 0;
@@ -942,7 +950,7 @@ static void start_icons(uint64_t start)
 /* an icon's file read: into its slot, handed over at once (or left out, or tried again later) */
 static void icon_read(int more, const char *why)
 {
-  uint64_t bit = 1ull << (icon - GAMEIMAGES_SHARED);
+  icon_bits_t bit = ICON_BIT(icon - GAMEIMAGES_SHARED);
   bool no_memory = (more < 0 && why == zstd_no_memory) || sink_why == zstd_no_memory;
   if (no_memory) {
     icons_short |= bit;

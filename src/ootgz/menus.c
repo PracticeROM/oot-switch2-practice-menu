@@ -563,7 +563,8 @@ static const struct { const char *label; uint8_t picture; } item_pictures[] = {
   { "skulltulas", GAMEPIC_SKULLTULA }, { "deku stick bag", GAMEPIC_STICK_BAG }, { "deku nut bag", GAMEPIC_NUT_BAG },
   { "deku seed bag", GAMEPIC_BULLET_BAG }, { "bomb bag", GAMEPIC_BOMB_BAG }, { "quiver", GAMEPIC_QUIVER },
   { "wallet", GAMEPIC_WALLET }, { "business scrub seed", GAMEPIC_SCRUB_SEED },
-  { "business scrub seeds", GAMEPIC_SCRUB_SEED },
+  { "business scrub seeds", GAMEPIC_SCRUB_SEED }, { "mask slot", GAMEPIC_MASK_KEATON },
+  { "amiibo mask", GAMEPIC_MASK_FAIRY_KID },
 };
 
 static bool same_text(const char *a, const char *b)
@@ -573,7 +574,8 @@ static bool same_text(const char *a, const char *b)
   return *a == *b;
 }
 
-/* the options whose picture is the chosen item's (as many as their choices; "none" shows the first) */
+/* the options whose picture is the chosen item's (as many as their choices; "none" shows the first, or
+ * nothing where it's 0: its room kept) */
 static const uint8_t ocarina_pictures[] = { GAMEPIC_OCARINA_FAIRY, GAMEPIC_OCARINA_FAIRY, GAMEPIC_OCARINA_TIME };
 static const uint8_t hookshot_pictures[] = { GAMEPIC_HOOKSHOT, GAMEPIC_HOOKSHOT, GAMEPIC_LONGSHOT };
 static const uint8_t big_sword_pictures[] = { GAMEPIC_SWORD_GIANT, GAMEPIC_SWORD_GIANT, GAMEPIC_SWORD_BROKEN,
@@ -581,6 +583,11 @@ static const uint8_t big_sword_pictures[] = { GAMEPIC_SWORD_GIANT, GAMEPIC_SWORD
 static const uint8_t gauntlet_pictures[] = { GAMEPIC_GAUNTLETS, GAMEPIC_GAUNTLETS, GAMEPIC_GAUNTLETS_GOLD };
 static const uint8_t scale_pictures[] = { GAMEPIC_SCALE, GAMEPIC_SCALE, GAMEPIC_SCALE_GOLD };
 static const uint8_t magic_pictures[] = { GAMEPIC_MAGIC, GAMEPIC_MAGIC, GAMEPIC_MAGIC_DOUBLE };
+/* data_masks' and data_amiibo_masks' order (gendata.py) */
+static const uint8_t mask_pictures[] = { 0, GAMEPIC_MASK_KEATON, GAMEPIC_MASK_SKULL, GAMEPIC_MASK_SPOOKY,
+                                         GAMEPIC_MASK_BUNNY, GAMEPIC_MASK_GORON, GAMEPIC_MASK_ZORA,
+                                         GAMEPIC_MASK_GERUDO, GAMEPIC_MASK_TRUTH };
+static const uint8_t amiibo_mask_pictures[] = { 0, GAMEPIC_MASK_FAIRY_KID, GAMEPIC_MASK_PRINCESS };
 static const struct { const char *label; const uint8_t *pictures; int n; } choice_pictures[] = {
   { "ocarina", ocarina_pictures, ARRAY_LEN(ocarina_pictures) },
   { "hookshot", hookshot_pictures, ARRAY_LEN(hookshot_pictures) },
@@ -588,6 +595,8 @@ static const struct { const char *label; const uint8_t *pictures; int n; } choic
   { "gauntlets", gauntlet_pictures, ARRAY_LEN(gauntlet_pictures) },
   { "scale", scale_pictures, ARRAY_LEN(scale_pictures) },
   { "magic meter", magic_pictures, ARRAY_LEN(magic_pictures) },
+  { "mask slot", mask_pictures, ARRAY_LEN(mask_pictures) },
+  { "amiibo mask", amiibo_mask_pictures, ARRAY_LEN(amiibo_mask_pictures) },
 };
 
 /* the items of an item menu: their pictures, by their labels (an option's by its choice, when it has a
@@ -702,7 +711,7 @@ static bool replace_on_item_buttons(const uint32_t *old_items, int n_old, uint32
 /* Trade slots and masks: one item at a time; trading switches an item button holding the old one.
  * it->data: the slot's items (pouch_one_t), it->data2: how many. Choice 0 is "none". */
 static const char *trade_names[2][MAX_CHOICES]; /* [0] child, [1] adult */
-static const char *mask_names[MAX_CHOICES];
+static const char *mask_names[MAX_CHOICES], *amiibo_mask_names[MAX_CHOICES];
 
 static int get_trade(menu_item_t *it)
 {
@@ -727,7 +736,8 @@ static void set_trade(menu_item_t *it, int choice)
     if (i + 1 != choice && gd_get_int(stock_hash(slot_items[i].item), &stock) && stock > 0) {
       gd_set_int(stock_hash(slot_items[i].item), 0);
       gd_set_bool(is_get_hash(slot_items[i].item), false);
-      old_buttons[n_old++] = murmur3(slot_items[i].button);
+      if (slot_items[i].button)
+        old_buttons[n_old++] = murmur3(slot_items[i].button);
     }
   }
   const pouch_one_t *chosen = choice > 0 ? &slot_items[choice - 1] : 0;
@@ -735,8 +745,8 @@ static void set_trade(menu_item_t *it, int choice)
     gd_set_int(stock_hash(chosen->item), 1);
     gd_set_bool(is_get_hash(chosen->item), true);
   }
-  uint32_t replacement = murmur3(chosen ? chosen->button : "Empty");
-  if (replace_on_item_buttons(old_buttons, n_old, replacement))
+  uint32_t replacement = murmur3(chosen && chosen->button ? chosen->button : "Empty");
+  if (n_old && replace_on_item_buttons(old_buttons, n_old, replacement))
     pouch_refresh_screen(z64hd_game->vt_hud);
 }
 
@@ -1120,10 +1130,12 @@ static void build_ammo(void)
 
 static void build_equipment(void)
 {
-  mask_names[0] = "none";
+  mask_names[0] = amiibo_mask_names[0] = "none";
   for (int i = 0; i < data_n_masks && i < MAX_CHOICES - 1; i++)
     mask_names[i + 1] = data_masks[i].label;
-  menu_init(&m_equipment, "equipment items", 21);
+  for (int i = 0; i < data_n_amiibo_masks && i < MAX_CHOICES - 1; i++)
+    amiibo_mask_names[i + 1] = data_amiibo_masks[i].label;
+  menu_init(&m_equipment, "equipment items", 22);
   menu_add_heading(&m_equipment, "swords");
   add_item(&m_equipment, "kokiri sword", "kokiri sword");
   add_item(&m_equipment, "master sword", "master sword");
@@ -1153,6 +1165,11 @@ static void build_equipment(void)
                                        (intptr_t)data_masks);
   if (masks)
     masks->data2 = data_n_masks; /* one mask at a time, like the trade slots */
+  /* the amiibo masks: a slot of their own on the equipment screen, one at a time too */
+  menu_item_t *amiibo = menu_add_option(&m_equipment, "amiibo mask", data_n_amiibo_masks + 1, amiibo_mask_names,
+                                        get_trade, set_trade, (intptr_t)data_amiibo_masks);
+  if (amiibo)
+    amiibo->data2 = data_n_amiibo_masks;
   menu_add_return(&m_equipment);
 }
 

@@ -14,7 +14,8 @@ shader, font and textures, all loaded from the game's RomFS at start-up:
 - **No new game addresses**: the shader, font and textures come from files; NVN comes through the `nvnBootstrapLoader`
   hook `got.c` already has. The same code serves 1.0.0, 1.1.1 and later updates.
 - **Nothing in the game changes**: no state in the game's UI system. Memory comes from the game's heap at start-up
-  (fonts, shader, GPU buffers, and the game's pictures: about 10 MB while they load, 4 MB kept).
+  (fonts, shader, GPU buffers, and the game's pictures: about 15 MB for a few seconds the first time they're made,
+  6.4 MB kept; later starts read them from the SD card).
 - **Anything can be drawn**: gz's checkboxes, the memory viewer, the keyboard, the collision view (lines, which the
   copy path can't draw).
 
@@ -153,6 +154,28 @@ Read with [KillzXGaming/ShaderLibrary](https://github.com/KillzXGaming/ShaderLib
   hookshot, big sword, gauntlets, scale, magic meter) shows the chosen one's (`choice_pictures`, "none"
   the first's). Each picture's covered part (its alpha) is fitted inside its row, within the cursor's line; it's drawn a few times a fraction
   of a pixel apart, each at 1/k (their average), so it doesn't break up into noise.
+- Memory. The game's heap is small (FINDINGS.md 9.6), and making the pictures needs the most of it:
+  - Decoding `Common.bntx` takes its 8 MiB window, 1 MiB more to slide it back and 0.6 MiB for the decoder at
+    the start, then the header (0.7 MiB) until its records are read, then the 4.6 MB of pictures it keeps
+    instead. The decoder's few allocations a block (literals, sequences, Huffman and FSE tables) come from
+    that 0.6 MiB (`zstd_stream_t`'s arena), so it can't run out half way while the game takes the heap. An
+    icon's stream is only as big as its file (3.2 MiB at most).
+  - The archive's pictures and the icons each go on without the other, and an icon that doesn't fit doesn't
+    hold up the rest. What ran out of memory is tried again 10, 30, 60 and 120 s later, then every 5 minutes,
+    8 times at most. Tried again, the archive's pictures' memory is taken with its stream, and it's only
+    decoded if 4 MB more are free for the game then.
+  - Once made, they're kept on the SD card, `sloperinaGZ/cache/pictures-<version>.bin` (4.8 MB) and
+    `icons-<version>.bin` (0.9 MB): the pictures as they're drawn, after a header with what they were made from
+    (this module's version, the pictures' names, the archive's size or the icon files' sizes) and a checksum,
+    written last. Later starts read them (3 ms on the Mac) with no more memory than they keep. A file that
+    isn't right is deleted and made afresh. The SD card's data goes through a 64 KiB buffer of the module's
+    own: the file system locks the memory a call uses, and the pictures' memory may be made the GPU's at any
+    moment.
+  - The panels drawn on the CPU (gz's style, or the game's when its GPU drawing can't start) need 12 MB of
+    buffers at 3x (23 MB with the see-through background), a block per panel. In gz's style they're taken at
+    the start, else when a panel is first drawn that way; they're given back as soon as the GPU draws the
+    panels, before its drawing is set up. With no memory for the menu's in gz's style, the game's style is
+    used instead (and a notice says so).
 - The cursor's motion follows the game's `PaOptionBtnL_00` animations (60 frames a second): `Select` (8
   frames: shown at once, alpha 0 to 1 over 4, its line and glow from 0.4 and 0.6 thinner to full, brightness
   0.74 to 1 easing out), `UnSelect` on the item left (14 frames: alpha 1 to 0 over 8, thinning back), and

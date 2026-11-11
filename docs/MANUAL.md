@@ -370,6 +370,11 @@ seconds after you close the menu. It's plain `key=value` text: cheats, watches (
 names and whether shown), the watches box, menu size, background, language, input display, levitate and frame
 advance. Delete it to go back to the defaults. Your game saves are never touched.
 
+The game's pictures sloperinaGZ uses (the controllers in the input display, the menus' parts, the item icons)
+are kept in `sloperinaGZ/cache/` once they're made from your copy of the game, so later starts don't have to make
+them again. They're the game's own pictures: don't share them. Delete the folder whenever you like; they're made
+afresh at the next start.
+
 ## 6 Languages
 
 **settings > language** lists English and every translation on the SD card (`sloperinaGZ/lang/<code>.json`).

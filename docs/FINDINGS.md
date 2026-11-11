@@ -910,4 +910,8 @@ Entries 1 to 4 and 14 were empty; 35 and 40 had no name getter.
   `+0x130`, aspect `+0x140`. Distance ahead = n f / (f - d (f - n)); d = f (1 - n / z) / (f - n) (`view_depth`).
   Link's torso read 3.41 m where the CPU projection put his middle at 3.54.
 - **Memory:** the game's heap gave one 9.6 MB block but not 15 MB (a Depth32F the picture's size at 2560x1440),
-  nor a second 5.3 MB block next to the 5.3 MB depth; held 1 MB blocks ran out at about 10 in gameplay.
+  nor a second 5.3 MB block next to the 5.3 MB depth; held 1 MB blocks ran out at about 10 in gameplay. The
+  pictures (`gameimage.c`) showed it too: a tester's decoding of `Common.bntx` got its 10 MB window, then failed
+  early on (after 5.6 and 8 of the 144.5 MiB it decodes) on the decoder's 17 KB and 41 KB blocks while the game
+  loaded; on the Mac, 4.6 MB for the cached pictures wasn't there while gz's style still held its 23 MB of
+  panels and see-through buffers.

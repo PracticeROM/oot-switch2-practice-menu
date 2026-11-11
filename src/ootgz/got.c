@@ -69,14 +69,27 @@ uintptr_t *got_slot(uintptr_t module, const char *name)
   return 0;
 }
 
-const char *got_hook(uintptr_t module, const char *name, void *replacement, void **previous)
+/* True if addr is code in a mapped region that doesn't hold `module`'s start. */
+static bool code_outside(uintptr_t addr, uintptr_t module)
+{
+  sys_meminfo_t region;
+  if (sys_query_memory(&region, addr) != 0 || !(region.perm & SYS_PERM_X))
+    return false;
+  return module < region.addr || module - region.addr >= region.size;
+}
+
+const char *got_hook(uintptr_t module, const char *name, void *replacement, void *function, void **next)
 {
   uintptr_t *slot = got_slot(module, name);
   if (!slot)
     return "import not found";
   if (!sys_mapped((uintptr_t)slot, 8, SYS_PERM_R | SYS_PERM_W))
     return "GOT is read-only";
-  *previous = (void *)__atomic_load_n(slot, __ATOMIC_ACQUIRE);
+  uintptr_t old = __atomic_load_n(slot, __ATOMIC_ACQUIRE);
+  void *target = code_outside(old, module) ? (void *)old : function;
+  if (!target)
+    return "the import isn't bound yet, and this module has no definition of it to call";
+  *next = target;
   __atomic_store_n(slot, (uintptr_t)replacement, __ATOMIC_RELEASE);
   return 0;
 }

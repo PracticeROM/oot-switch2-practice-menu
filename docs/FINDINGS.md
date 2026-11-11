@@ -616,7 +616,7 @@ Objects:
   "a villager's reward" (`Npc_Hylia_001_IsGetHeartPiece`, Kakariko) and "frogs, second game"
   (`MiniGame_FrogTenors_InsectRepellent`) say no more than the names do. The position is the actor's (a piece's
   anchor), in the same units as Link's (air walls compare them too).
-- **Not verified:** the page in game (the counts should match the numbers above); 1.0.0 (see Bool64bitKey).
+- **Checked in game** (1.1.1): the page works. **Not verified:** 1.0.0 (see Bool64bitKey).
 
 ## 6. Things that do not work
 

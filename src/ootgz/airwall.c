@@ -318,8 +318,22 @@ static void check_link(void)
   link_depth = best;
 }
 
+/* The map's walls and the one Link is in, worked out at most once a frame, and only on the frames that use
+ * them: the outlines, or one of the two texts below (the air wall watch, scene > collision). */
+static uint32_t frame_number, checked_frame = UINT32_MAX;
+
+static void check_now(void)
+{
+  if (checked_frame == frame_number)
+    return;
+  checked_frame = frame_number;
+  update_map();
+  check_link();
+}
+
 void airwall_link_text(char *buf, int len)
 {
+  check_now();
   if (!current_map)
     snprintf(buf, len, TF("no walls here"));
   else if (link_wall < 0)
@@ -613,8 +627,9 @@ static int sort_near_walls(const view_cam_t *cam)
 
 void airwall_frame(bool gpu)
 {
-  update_map();
-  check_link();
+  frame_number++;
+  if (airwalls_shown)
+    check_now();
   int f = publish_next(&published), n = 0, nl = 0;
   n_walls_near = 0;
   link_boxes[f].ok = false;
@@ -675,6 +690,7 @@ void airwall_release(void)
 
 void airwall_summary(char *buf, int len)
 {
+  check_now();
   if (!current_map)
     snprintf(buf, len, TF("no air walls in this map"));
   else

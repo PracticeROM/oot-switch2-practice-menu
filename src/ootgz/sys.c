@@ -69,16 +69,26 @@ uint64_t sys_tick_freq(void)
 #define MEM_ATTR_LOCKED   0x1    /* locked/borrowed */
 #define MAX_REGIONS      100000 /* stops a region walk that never ends */
 
-static sys_meminfo_t last_region; /* the region last queried; size 0 = none */
+/* The regions last queried (size 0: none), forgotten each frame (sys_frame). A frame's reads go back and
+ * forth between a few of them (main's data, the heap, the module's own), so one remembered region was asked
+ * for again at nearly every read: a system call each time. */
+#define CACHED_REGIONS 4
+static sys_meminfo_t cached_regions[CACHED_REGIONS];
+static unsigned next_cached; /* the one replaced next */
 
 bool sys_mapped(uintptr_t addr, size_t size, uint32_t perm)
 {
   if (addr < NULL_PAGE_END || addr + size < addr)
     return false;
-  sys_meminfo_t *region = &last_region;
-  bool in_cached_region =
-    region->size && addr >= region->addr && addr + size <= region->addr + region->size;
-  if (!in_cached_region) {
+  sys_meminfo_t *region = 0;
+  for (int i = 0; i < CACHED_REGIONS && !region; i++) {
+    sys_meminfo_t *cached = &cached_regions[i];
+    if (cached->size && addr >= cached->addr && addr + size <= cached->addr + cached->size)
+      region = cached;
+  }
+  if (!region) {
+    region = &cached_regions[next_cached];
+    next_cached = (next_cached + 1) % CACHED_REGIONS;
     if (sys_query_memory(region, addr) != 0) {
       region->size = 0;
       return false;
@@ -91,7 +101,8 @@ bool sys_mapped(uintptr_t addr, size_t size, uint32_t perm)
 
 void sys_frame(void)
 {
-  last_region.size = 0;
+  for (int i = 0; i < CACHED_REGIONS; i++)
+    cached_regions[i].size = 0;
 }
 
 uintptr_t sys_ptr(uintptr_t addr)

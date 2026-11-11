@@ -167,11 +167,9 @@ static bool is_numeric_run(const char *s, int n)
 /* one glyph: on the GPU from the atlas, else blended into the strip */
 static void put_glyph(gf_face_t face, int em, uint32_t cp, const gf_glyph_t *g, int x64, int baseline, rgb_t colour)
 {
-  if (gpu) { /* a soft shadow first, so the text reads on bright scenes too */
-    float x = gpu_x + x64 / 64.0f, y = gpu_y + baseline, d = em / 14.0f > 1 ? em / 14.0f : 1;
-    gpuui_glyph(face, em, cp, x + d, y + d, (gpu_colour_t){ 0, 0, 0, 0.55f * gpu_fade });
-    gpuui_glyph(face, em, cp, x, y, to_gpu(colour, 1));
-  } else
+  if (gpu) /* with a soft shadow under it, so the text reads on bright scenes too: both in one quad */
+    gpuui_glyph_shadowed(face, em, cp, gpu_x + x64 / 64.0f, gpu_y + baseline, to_gpu(colour, 1));
+  else
     draw_glyph(g, x64, baseline, colour);
 }
 

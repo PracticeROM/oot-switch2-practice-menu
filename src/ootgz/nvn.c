@@ -63,6 +63,8 @@ enum {
   SYNC_FAILED = 3,
 };
 #define SYNC_TIMEOUT_NS 1000000000ull /* a second */
+#define SLOT_WAIT_NS 100000000ull     /* each frame's wait for its slot: a tenth of a second */
+#define STUCK_SECONDS 5               /* slots still busy this long on end: the GPU is stuck */
 
 #define CLEAR_ALL_CHANNELS 0xF /* nvnCommandBufferClearColor's mask: R, G, B and A */
 #define SCISSOR_ALL 65535      /* a scissor size that covers any texture */
@@ -325,6 +327,7 @@ static uint32_t drawn_hash[GFX_PANELS][SLOTS];
 static int drawn_w[GFX_PANELS][SLOTS], drawn_h[GFX_PANELS][SLOTS];
 static bool drawn_native[GFX_PANELS][SLOTS]; /* drawn by nativeui.c (the game's type) */
 static unsigned frame_count;
+static uint64_t slot_waiting_since; /* sys_tick when a frame first found its slot still busy; 0: not waiting */
 static int swapchain_format, bytes_per_pixel;
 static int alloc_scale; /* the scale the buffers were sized for (whole screen pixels per font pixel) */
 static bool origin_lower_left; /* scissor rectangles count from the bottom (NVN's default) */
@@ -484,6 +487,11 @@ static bool readback_made[GFX_PANELS][SLOTS];
 static uint8_t *readback_mem[GFX_PANELS][SLOTS];
 static size_t readback_size[GFX_PANELS];
 static nvn_region_t readback_region[GFX_PANELS][SLOTS]; /* what each readback holds */
+/* ... and the present (gfx_presents) it was asked for at. A slot comes round every SLOTS presents; a readback
+ * older than a few is of a picture long gone (the panel was hidden and is shown again in the same place: the
+ * menu reopened), and blending with it showed that old picture behind the panel for two frames. */
+static uint32_t readback_present[GFX_PANELS][SLOTS];
+#define READBACK_FRESH (SLOTS + 2)
 /* each panel's text as PAL_ indices at font resolution, and what it was built from */
 static uint8_t *text_mask[GFX_PANELS];
 static size_t text_mask_size[GFX_PANELS];
@@ -1460,6 +1468,11 @@ typedef struct {
   nvn_region_t readback_region;
 } panel_draw_t;
 
+/* The frame's quads kept for the panels while the air walls and the enemies' health are drawn (gpuui_reserve):
+ * a full menu is some 1000 (a quad a character, and its box and cursor), and twice that for the moment one
+ * menu fades out as the next comes in. The overlays keep the rest, about as many. */
+#define PANEL_QUADS 2000
+
 /* settings > menu > size: auto, 2x, 2.5x, 3x */
 #define MENU_SIZES 4
 
@@ -1604,7 +1617,8 @@ static bool plan_see_through_panel(panel_draw_t *draw, int p, const gfx_panel_t 
     build_text_mask(p, panel, cols, rows);
   /* this slot's readback is from two frames ago (its fence has passed) */
   const uint8_t *under = 0;
-  if (slot_used[slot] && same_region(&readback_region[p][slot], &rb_region)) {
+  bool fresh = gfx_presents - readback_present[p][slot] <= READBACK_FRESH;
+  if (slot_used[slot] && fresh && same_region(&readback_region[p][slot], &rb_region)) {
     fn.pool_invalidate(&readback_pool[p][slot], 0, (size_t)under_width * rb_rows * RGBA8_BYTES);
     under = readback_mem[p][slot];
   }
@@ -1617,6 +1631,7 @@ static bool plan_see_through_panel(panel_draw_t *draw, int p, const gfx_panel_t 
     draw->copy = false;
   drawn_hash[p][slot] = 0; /* the opaque path redraws when it's next used */
   readback_region[p][slot] = rb_region;
+  readback_present[p][slot] = gfx_presents;
   draw->readback_region = rb_region;
   draw->readback = fn.pool_address(&readback_pool[p][slot]);
   draw->readback_rows = rb_rows;
@@ -1722,11 +1737,21 @@ static void draw_overlay(nvn_queue_t *queue, nvn_window_t *window, int index)
   int hud_bottom_right = -1; /* the watches' top edge when they're at the bottom right: the log goes above */
   int hud_bottom_left = -1;  /* ... at the bottom left: the input display goes above */
 
-  frame.slot = frame_count++ % SLOTS;
-  if (!slot_finished(frame.slot)) { /* see wait_gpu_idle */
-    overlay_fail("GPU didn't finish the previous copy");
+  /* The frame's slot, once the GPU is done with what it last held (two frames ago: nearly always long done).
+   * If it isn't, nothing is drawn over this frame and the next one tries the same slot again, rather than
+   * holding the game's present back for long, or giving up drawing for good over one slow moment (a loading
+   * hitch); only a GPU that stays stuck ends it. */
+  frame.slot = frame_count % SLOTS;
+  if (slot_used[frame.slot] && fn.sync_wait(&slot_sync[frame.slot], SLOT_WAIT_NS) >= SYNC_TIMEOUT_EXPIRED) {
+    uint64_t now = sys_tick();
+    if (!slot_waiting_since)
+      slot_waiting_since = now ? now : 1;
+    else if (now - slot_waiting_since > STUCK_SECONDS * sys_tick_freq())
+      overlay_fail("GPU didn't finish the previous copy");
     return;
   }
+  slot_waiting_since = 0;
+  frame_count++;
   int gpu_panels = 0;
   /* the glyph atlas starts afresh when it's full: its staging rows are rewritten, so the copies of both
    * slots must be done first (rare: a new text size or language) */
@@ -1749,7 +1774,11 @@ static void draw_overlay(nvn_queue_t *queue, nvn_window_t *window, int index)
   }
   /* the air walls and the enemies' health: on the GPU in the game's style (under the panels), else as
    * cleared rectangles below */
+  if (gpu && screen) /* the panels are drawn after them, over them: their share of the frame's quads is kept */
+    gpuui_reserve(PANEL_QUADS);
   int overlays = gpu ? overlayui_draw(frame.area.w, frame.area.h, pause_icon) : 0;
+  if (gpu)
+    gpuui_reserve(0);
   if (overlays)
     gpu_panels++;
 

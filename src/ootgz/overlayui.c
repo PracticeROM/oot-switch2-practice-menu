@@ -53,14 +53,19 @@ static const gpu_colour_t line_colours[AW_NCOLORS] = {
   [AW_OTHER] = { 0.66f, 0.58f, 1.0f, 1 },  /* violet: other kinds */
 };
 
-static bool draw_lines(float w, float h, float px)
+/* budget: the quads the lines may take. Short of them, the glows go first, then the farthest lines. */
+static bool draw_lines(float w, float h, float px, int budget)
 {
   int n;
   const aw_line_t *lines = airwall_lines(&n);
   if (!lines || !n)
     return false;
+  int n_lines = n < MAX_LINES_DRAWN ? n : MAX_LINES_DRAWN;
+  n_lines = n_lines < budget ? n_lines : budget;
+  int n_glows = n < MAX_GLOWS ? n : MAX_GLOWS;
+  n_glows = n_glows < budget - n_lines ? n_glows : budget - n_lines;
   for (int pass = 0; pass < 2; pass++) { /* the glows first, then the lines over them */
-    int count = pass ? (n < MAX_LINES_DRAWN ? n : MAX_LINES_DRAWN) : (n < MAX_GLOWS ? n : MAX_GLOWS);
+    int count = pass ? n_lines : n_glows;
     for (int i = 0; i < count; i++) {
       const aw_line_t *l = &lines[i];
       gpu_colour_t c = line_colours[l->color < AW_NCOLORS ? l->color : 0];
@@ -89,6 +94,7 @@ static bool draw_lines(float w, float h, float px)
 #define DIGITS_H 13.0f   /* the life's type: its capitals */
 #define LOW_LIFE 0.25f   /* below this share the fill glows brighter, slowly */
 #define MAX_BARS_DRAWN 16 /* the nearest (each takes some 40 to 60 of the frame's quads: the fill's tiles, 2 a segment) */
+#define BAR_QUADS 80      /* the most a bar takes: what's set aside for each when the frame's quads are shared out */
 #define DRAIN_WAIT_MS 280
 #define DRAIN_MS 420
 
@@ -368,7 +374,9 @@ static bool draw_bars(float w, float h, float px)
     order[j] = i;
   }
   uint64_t now = sys_tick();
-  for (int i = n > MAX_BARS_DRAWN ? n - MAX_BARS_DRAWN : 0; i < n; i++) { /* the nearest are last */
+  int most = gpuui_quads_free() / BAR_QUADS; /* short of quads: the farthest are left out */
+  most = most < MAX_BARS_DRAWN ? most : MAX_BARS_DRAWN;
+  for (int i = n > most ? n - most : 0; i < n; i++) { /* the nearest are last */
     const eh_bar_t *b = &bars[order[i]];
     float alpha = enemy_hp_xray ? 1 : scenedepth_bar_alpha(b->id, now);
     if (alpha <= 0.004f) /* behind the scenery */
@@ -388,6 +396,7 @@ static bool draw_bars(float w, float h, float px)
 #define PAUSE_Y 0.045f
 #define PAUSE_H 34.0f  /* its height */
 #define PAUSED 1       /* gfx_pause_icon: paused (else advancing) */
+#define PAUSE_QUADS 4  /* the icon's two shapes and their shadows */
 
 static float clamp01(float v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
 
@@ -458,6 +467,13 @@ int overlayui_draw(int w, int h, int pause_icon)
   if (w <= 0 || h <= 0)
     return 0;
   float px = (float)h / REF_H;
-  return (draw_lines((float)w, (float)h, px) ? OVERLAY_LINES : 0) | (draw_bars((float)w, (float)h, px) ? OVERLAY_BARS : 0) |
+  /* The frame's quads (short of what nvn.c keeps for the panels), shared out: the pause icon's few, the bars'
+   * (they say more than the lines do), and the lines get the rest. */
+  int n_bars;
+  enemyhp_bars(&n_bars);
+  n_bars = n_bars < MAX_BARS_DRAWN ? n_bars : MAX_BARS_DRAWN;
+  int for_lines = gpuui_quads_free() - (pause_icon ? PAUSE_QUADS : 0) - n_bars * BAR_QUADS;
+  return (draw_lines((float)w, (float)h, px, for_lines > 0 ? for_lines : 0) ? OVERLAY_LINES : 0) |
+         (draw_bars((float)w, (float)h, px) ? OVERLAY_BARS : 0) |
          (draw_pause((float)w, (float)h, px, pause_icon) ? OVERLAY_PAUSE : 0);
 }

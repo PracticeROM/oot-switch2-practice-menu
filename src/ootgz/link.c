@@ -160,6 +160,23 @@ uintptr_t mem_find_u64_step(mem_scan_t *scan, uint64_t value, bool (*ok)(uintptr
 
 static uintptr_t cached_equip_component, cached_equip_owner;
 
+/* A search of the whole heap takes long enough to feel, and one that found nothing would be made again at
+ * every call. So after a miss it isn't made again for the same thing (Link's actor, or his component) until
+ * EQUIP_SEARCH_GAP frames have passed. */
+#define EQUIP_SEARCH_GAP 300
+typedef struct { uintptr_t what; uint32_t at; bool missed; } search_miss_t;
+static search_miss_t component_miss, owner_miss;
+
+static bool searched_lately(const search_miss_t *miss, uintptr_t what)
+{
+  return miss->missed && miss->what == what && frame_counter() - miss->at < EQUIP_SEARCH_GAP;
+}
+
+static void note_search(search_miss_t *miss, uintptr_t what, bool found)
+{
+  *miss = (search_miss_t){ what, frame_counter(), !found };
+}
+
 static bool is_link_component(uintptr_t component, uintptr_t link)
 {
   return sys_ptr(component) == MAIN(z64hd_game->vt_equip) && sys_ptr(component + EQUIP_COMPONENT_LINK) == link;
@@ -193,7 +210,10 @@ uintptr_t link_equip_component(void)
         return cached_equip_component;
       }
     }
+  if (searched_lately(&component_miss, link))
+    return 0;
   cached_equip_component = mem_find_u64(MAIN(z64hd_game->vt_equip), is_links_component_hit, (void *)link);
+  note_search(&component_miss, link, cached_equip_component != 0);
   return cached_equip_component;
 }
 
@@ -224,7 +244,10 @@ uintptr_t link_equip_owner(void)
         return cached_equip_owner;
       }
     }
+  if (searched_lately(&owner_miss, component))
+    return cached_equip_owner = 0;
   uintptr_t hit = mem_find_u64(component, is_owner_hit, (void *)component);
+  note_search(&owner_miss, component, hit != 0);
   cached_equip_owner = hit ? hit - EQUIP_OWNER_COMPONENT : 0;
   return cached_equip_owner;
 }

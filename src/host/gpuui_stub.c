@@ -13,6 +13,11 @@ float gpuui_glyph(gf_face_t face, int em, uint32_t cp, float x, float baseline, 
   (void)face, (void)em, (void)cp, (void)x, (void)baseline, (void)colour;
   return 0;
 }
+float gpuui_glyph_shadowed(gf_face_t face, int em, uint32_t cp, float x, float baseline, gpu_colour_t colour)
+{
+  (void)face, (void)em, (void)cp, (void)x, (void)baseline, (void)colour;
+  return 0;
+}
 void gpuui_shape(uint32_t id, int w, int h, gpu_paint_t paint, const void *arg, float x, float y, gpu_colour_t colour)
 {
   (void)id, (void)w, (void)h, (void)paint, (void)arg, (void)x, (void)y, (void)colour;

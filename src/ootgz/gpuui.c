@@ -8,7 +8,10 @@
  *                 the four corners' texture coordinates, a 2x3 texture matrix
  *   FS uniform 4  `UiMaterial`: colour scale 1, offset 0, alpha and RGB multipliers 1, flags 0x2 (discard
  *                 where alpha is 0)
- *   FS texture 8  the glyph atlas: R8 coverage seen as (1, 1, 1, coverage)
+ *   FS texture 8  the glyph atlas: RG8, a luminance and a coverage, seen as (l, l, l, coverage). Plain
+ *                 coverage has luminance 1 (so it's the corner colours times the coverage, as an R8 atlas
+ *                 would be); a glyph with its shadow baked in (gpuui_glyph_shadowed) has it 0 where only
+ *                 the shadow shows, so one quad draws both
  * Output alpha is straight, so blending is SRC_ALPHA / ONE_MINUS_SRC_ALPHA. Each quad is one draw with
  * its element bound. The atlas only grows within a frame: glyphs are added as they're asked for and the
  * rows they touched are copied up before the frame's draws. Nothing here waits for the GPU: nvn.c's
@@ -28,7 +31,7 @@ float sqrtf(float x);
 
 #define PAGE 0x1000
 #define SLOTS 2               /* nvn.c's */
-#define MAX_QUADS 4096        /* a frame's quads (a glyph is two: its shadow and itself) */
+#define MAX_QUADS 4096        /* a frame's quads (a glyph is one, its shadow baked into its image) */
 #define ELEMENT_SIZE 0x100    /* 46 words, at the storage-buffer alignment */
 #define ELEMENT_WORDS 46
 #define UNIFORM_SIZE 0x100
@@ -36,6 +39,8 @@ float sqrtf(float x);
 #define POOL_ENTRIES 512      /* texture / sampler descriptors: the first ones (256) are NVN's own */
 #define ATLAS_W 1024
 #define ATLAS_H 1024
+#define ATLAS_BPP 2                        /* RG8: a texel's luminance, then its coverage */
+#define ATLAS_STRIDE (ATLAS_W * ATLAS_BPP) /* a staging row, in bytes */
 #define CODE_ALIGN 0x100
 #define CODE_PADDING 0x800    /* after the last code area (NVN 2's shader pool padding) */
 #define CMD_RESERVE 0x4000    /* command memory kept free (nvn.c's own commands, the restore) */
@@ -46,8 +51,8 @@ enum {
   STAGE_VERTEX = 0, STAGE_FRAGMENT = 1, STAGES_GRAPHICS = 0xFF,
   BLEND_ONE = 2, BLEND_SRC_ALPHA = 5, BLEND_ONE_MINUS_SRC_ALPHA = 6, BLEND_ADD = 1,
   FACE_NONE = 0, PRIM_TRIANGLE_STRIP = 5,
-  FMT_R8 = 0x01, FMT_RG32F = 0x16, FMT_ASTC_4X4 = 0x79, TARGET_2D = 1,
-  SWIZZLE_ONE = 1, SWIZZLE_R = 2, FILTER_LINEAR = 1, WRAP_CLAMP_TO_EDGE = 7,
+  FMT_R8 = 0x01, FMT_RG8 = 0x0D, FMT_RG32F = 0x16, FMT_ASTC_4X4 = 0x79, TARGET_2D = 1,
+  SWIZZLE_ONE = 1, SWIZZLE_R = 2, SWIZZLE_G = 3, FILTER_LINEAR = 1, WRAP_CLAMP_TO_EDGE = 7,
   BARRIER_ORDER_PRIMITIVES = 1, BARRIER_ORDER_FRAGMENTS = 2, BARRIER_INVALIDATE_TEXTURE = 0x10,
   BARRIER_INVALIDATE_TEXTURE_DESCRIPTOR = 0x40, BARRIER_INVALIDATE_ZCULL = 0x80,
   DEPTH_FUNC_LESS = 2, DEPTH_FUNC_LEQUAL = 4, DEPTH_FUNC_ALWAYS = 8, DEPTH_MODE_NEAR_IS_MINUS_W = 0,
@@ -314,11 +319,11 @@ static bool make_data(void)
   g.tb_device(&atlas_builder, device);
   g.tb_defaults(&atlas_builder);
   g.tb_target(&atlas_builder, TARGET_2D);
-  g.tb_format(&atlas_builder, FMT_R8);
+  g.tb_format(&atlas_builder, FMT_RG8);
   g.tb_size(&atlas_builder, ATLAS_W, ATLAS_H);
   g.tb_levels(&atlas_builder, 1);
   g.tb_flags(&atlas_builder, 0); /* block-linear: the copy lays the texels out */
-  g.tb_swizzle(&atlas_builder, SWIZZLE_ONE, SWIZZLE_ONE, SWIZZLE_ONE, SWIZZLE_R);
+  g.tb_swizzle(&atlas_builder, SWIZZLE_R, SWIZZLE_R, SWIZZLE_R, SWIZZLE_G); /* (luminance x3, coverage) */
   size_t atlas_size = g.tb_storage_size(&atlas_builder);
   size_t atlas_align = g.tb_storage_align(&atlas_builder);
   if (atlas_align < PAGE)
@@ -342,7 +347,7 @@ static bool make_data(void)
   off_samplers = at, at += (size_t)POOL_ENTRIES * sampler_descriptor;
   at = round_up(at, PAGE);
   off_elements = at, at += (size_t)SLOTS * MAX_QUADS * ELEMENT_SIZE;
-  off_staging = at, at += (size_t)ATLAS_W * ATLAS_H;
+  off_staging = at, at += (size_t)ATLAS_STRIDE * ATLAS_H;
   at = round_up(at, atlas_align);
   off_atlas = at, at += atlas_size;
   data_size = round_up(at, PAGE);
@@ -464,6 +469,21 @@ static atlas_slot_t *atlas_find(uint8_t face, int em, uint32_t cp)
   return 0;
 }
 
+/* where texel (x, y) is in the staging copy (write only: the pool's memory is uncached) */
+static uint8_t *staging_at(int x, int y)
+{
+  return data_mem + off_staging + (size_t)y * ATLAS_STRIDE + (size_t)x * ATLAS_BPP;
+}
+
+/* n texels of plain coverage (luminance 1) from cov, or of none (cov NULL) */
+static void put_coverage(uint8_t *texels, const uint8_t *cov, int n)
+{
+  for (int i = 0; i < n; i++) {
+    texels[ATLAS_BPP * i] = 255;
+    texels[ATLAS_BPP * i + 1] = cov ? cov[i] : 0;
+  }
+}
+
 /* room for a w x h image in the slot s (empty), with an empty border, cleared in the staging copy;
  * false: the atlas is full (gpuui_begin starts it afresh next frame) */
 static bool atlas_place(atlas_slot_t *s, uint8_t face, int em, uint32_t cp, int w, int h)
@@ -481,9 +501,8 @@ static bool atlas_place(atlas_slot_t *s, uint8_t face, int em, uint32_t cp, int 
                        (uint16_t)w, (uint16_t)h, 0, 0, 0 };
   if (!w || !h)
     s->state = 2;
-  uint8_t *staging = data_mem + off_staging;
-  for (int y = 0; y < ph; y++)
-    __builtin_memset(staging + (size_t)(shelf_y + y) * ATLAS_W + shelf_x, 0, (size_t)pw);
+  for (int y = 0; y < ph; y++) /* nothing there: luminance 1 (so filtering at an edge doesn't darken it), coverage 0 */
+    put_coverage(staging_at(shelf_x, shelf_y + y), 0, pw);
   if (shelf_y < dirty_top)
     dirty_top = shelf_y;
   if (shelf_y + ph > dirty_bottom)
@@ -493,6 +512,35 @@ static bool atlas_place(atlas_slot_t *s, uint8_t face, int em, uint32_t cp, int 
     shelf_h = ph;
   atlas_count++;
   return true;
+}
+
+/* A w x h coverage image painted by paint(..., arg) into slot s (placed, w x h). Painted in a scratch buffer
+ * in ordinary memory when it fits; a bigger one in its own place in the staging copy (its first w bytes of
+ * each row) and widened there from the right, which reads the uncached memory back: slower, and only once. */
+#define SCRATCH_W 128
+#define SCRATCH_H 128
+static void paint_into(const atlas_slot_t *s, int w, int h, gpu_paint_t paint, const void *arg)
+{
+  static uint8_t scratch[SCRATCH_W * SCRATCH_H];
+  if (w <= SCRATCH_W && h <= SCRATCH_H) {
+    __builtin_memset(scratch, 0, (size_t)w * h);
+    paint(scratch, w, h, w, arg);
+    for (int y = 0; y < h; y++)
+      put_coverage(staging_at(s->x, s->y + y), scratch + (size_t)y * w, w);
+    return;
+  }
+  uint8_t *first = staging_at(s->x, s->y);
+  for (int y = 0; y < h; y++) /* cleared as one-byte coverage, as paint expects to find it */
+    __builtin_memset(first + (size_t)y * ATLAS_STRIDE, 0, (size_t)w);
+  paint(first, w, h, ATLAS_STRIDE, arg);
+  for (int y = 0; y < h; y++) {
+    uint8_t *row = first + (size_t)y * ATLAS_STRIDE;
+    for (int x = w - 1; x >= 0; x--) {
+      uint8_t c = row[x];
+      row[ATLAS_BPP * x + 1] = c;
+      row[ATLAS_BPP * x] = 255;
+    }
+  }
 }
 
 static const atlas_slot_t *atlas_glyph(gf_face_t face, int em, uint32_t cp)
@@ -506,9 +554,50 @@ static const atlas_slot_t *atlas_glyph(gf_face_t face, int em, uint32_t cp)
   s->x0 = glyph->x0;
   s->y0 = glyph->y0;
   s->advance = glyph->advance / 64.0f;
-  uint8_t *staging = data_mem + off_staging;
   for (int y = 0; y < glyph->h; y++)
-    __builtin_memcpy(staging + (size_t)(s->y + y) * ATLAS_W + s->x, glyph->coverage + y * glyph->w, glyph->w);
+    put_coverage(staging_at(s->x, s->y + y), glyph->coverage + y * glyph->w, glyph->w);
+  return s;
+}
+
+/* A glyph and its shadow as one image: the shadow is the glyph again, black at GPUUI_SHADOW_ALPHA, `d` texels
+ * right and down, under the glyph. Where the glyph covers g and the shadow s (both 0..1), the glyph in colour
+ * C over the shadow is the colour C g / a at coverage a = g + s (1 - g): so the texel's luminance is g / a
+ * and its coverage a, and the quad's colour C times it gives both. (Exact for an opaque colour; at a colour's
+ * alpha below 1, a fading row, the glyph hides a little more of its own shadow than two quads did.) */
+#define SHADOW_FACE 0x80 /* atlas_map's face for these, with the gf_face_t */
+
+static int shadow_offset(int em)
+{
+  float d = em / 14.0f > 1 ? em / 14.0f : 1; /* a soft shadow that grows with the type */
+  return (int)(d + 0.5f);
+}
+
+static const atlas_slot_t *atlas_glyph_shadowed(gf_face_t face, int em, uint32_t cp)
+{
+  atlas_slot_t *s = atlas_find((uint8_t)(SHADOW_FACE | face), em, cp);
+  if (s && s->state)
+    return s;
+  const gf_glyph_t *glyph = gamefont_glyph(face, em, cp);
+  if (!glyph || !s)
+    return 0;
+  int d = shadow_offset(em), gw = glyph->w, gh = glyph->h;
+  bool empty = !gw || !gh; /* a space: nothing to draw, only its advance */
+  if (!atlas_place(s, (uint8_t)(SHADOW_FACE | face), em, cp, empty ? 0 : gw + d, empty ? 0 : gh + d))
+    return 0;
+  s->x0 = glyph->x0;
+  s->y0 = glyph->y0;
+  s->advance = glyph->advance / 64.0f;
+  const unsigned shadow_alpha = (unsigned)(GPUUI_SHADOW_ALPHA * 255 + 0.5f);
+  for (int y = 0; y < s->h; y++) {
+    uint8_t *row = staging_at(s->x, s->y + y);
+    for (int x = 0; x < s->w; x++) {
+      unsigned glyph_cov = x < gw && y < gh ? glyph->coverage[y * gw + x] : 0;
+      unsigned shadow_cov = x >= d && y >= d ? glyph->coverage[(y - d) * gw + (x - d)] * shadow_alpha / 255 : 0;
+      unsigned cov = glyph_cov + shadow_cov * (255 - glyph_cov) / 255;
+      row[ATLAS_BPP * x] = (uint8_t)(cov ? (glyph_cov * 255 + cov / 2) / cov : 255);
+      row[ATLAS_BPP * x + 1] = (uint8_t)cov;
+    }
+  }
   return s;
 }
 
@@ -530,6 +619,8 @@ typedef struct {
 
 static quad_t quads[MAX_QUADS];
 static int n_quads;
+static int quad_reserve; /* gpuui_reserve's: quads kept back from those made now, for what's drawn later */
+#define FRAME_QUADS (MAX_QUADS - LAYER_COLOURS - MASK_QUADS) /* the last elements are the lines' layer's */
 static float quad_scale = 1, quad_sx, quad_sy, quad_alpha = 1;
 /* the frame's colour mappings: UiMaterial's colour scale (white - black) and offset (black), its words 0-7,
  * alpha too (the shader clamps the alpha it maps before the corner colours' alpha multiplies it) */
@@ -569,6 +660,7 @@ bool gpuui_atlas_resetting(void)
 void gpuui_begin(nvn_texture_t *target, nvn_rect_t area, int texture_height, bool origin_lower_left, int slot)
 {
   n_quads = 0;
+  quad_reserve = 0;
   n_mappings = 0;
   quad_scale = 1;
   quad_alpha = 1;
@@ -589,7 +681,7 @@ void gpuui_begin(nvn_texture_t *target, nvn_rect_t area, int texture_height, boo
 
 static quad_t *new_quad(void)
 {
-  if (ready && n_quads < MAX_QUADS - LAYER_COLOURS - MASK_QUADS) { /* the last elements are the lines' layer's */
+  if (ready && n_quads < FRAME_QUADS - quad_reserve) {
     quads[n_quads].material = 0;
     quads[n_quads].depth_tested = false;
     quads[n_quads].scale = quad_scale, quads[n_quads].sx = quad_sx, quads[n_quads].sy = quad_sy;
@@ -597,10 +689,22 @@ static quad_t *new_quad(void)
     return &quads[n_quads++];
   }
   static bool warned;
-  if (ready && !warned)
-    log_printf("gpu drawing: more than %d quads in a frame; the rest left out", MAX_QUADS);
-  warned = true;
+  if (ready && !quad_reserve && !warned) { /* (short of a reserve, the caller is keeping to its share) */
+    log_printf("gpu drawing: more than %d quads in a frame; the rest left out", FRAME_QUADS);
+    warned = true;
+  }
   return 0;
+}
+
+void gpuui_reserve(int n)
+{
+  quad_reserve = n < 0 ? 0 : n > FRAME_QUADS ? FRAME_QUADS : n;
+}
+
+int gpuui_quads_free(void)
+{
+  int left = FRAME_QUADS - quad_reserve - n_quads;
+  return ready && left > 0 ? left : 0;
 }
 
 void gpuui_scale(float s, float ox, float oy)
@@ -726,7 +830,7 @@ void gpuui_line(float x0, float y0, float x1, float y1, float width, gpu_colour_
       atlas_full = true;
       return;
     }
-    paint_line_profile(data_mem + off_staging + (size_t)s->y * ATLAS_W + s->x, 4, LINE_PROFILE_H, ATLAS_W, 0);
+    paint_into(s, 4, LINE_PROFILE_H, paint_line_profile, 0);
   }
   if (!s || s->state != 1)
     return;
@@ -845,6 +949,22 @@ float gpuui_glyph(gf_face_t face, int em, uint32_t cp, float x, float baseline, 
   return s->advance;
 }
 
+float gpuui_glyph_shadowed(gf_face_t face, int em, uint32_t cp, float x, float baseline, gpu_colour_t colour)
+{
+  if (!ready)
+    return 0;
+  const atlas_slot_t *s = atlas_glyph_shadowed(face, em, cp);
+  if (!s) {
+    const gf_glyph_t *glyph = gamefont_glyph(face, em, cp);
+    if (glyph)
+      atlas_full = true; /* as gpuui_glyph: next frame starts the atlas afresh */
+    return glyph ? glyph->advance / 64.0f : 0;
+  }
+  if (s->state == 1) /* pixel-aligned, as the glyph was rasterised (its shadow is in the image, to its right and below) */
+    textured_quad(s, (float)(int)(x + 0.5f) + s->x0, baseline + s->y0, colour);
+  return s->advance;
+}
+
 void gpuui_shape(uint32_t id, int w, int h, gpu_paint_t paint, const void *arg, float x, float y, gpu_colour_t colour)
 {
   if (!ready || w <= 0 || h <= 0 || w > 0xFFFF || h > 0xFFFF)
@@ -856,7 +976,7 @@ void gpuui_shape(uint32_t id, int w, int h, gpu_paint_t paint, const void *arg, 
       atlas_full = true;
       return;
     }
-    paint(data_mem + off_staging + (size_t)s->y * ATLAS_W + s->x, w, h, ATLAS_W, arg);
+    paint_into(s, w, h, paint, arg);
   }
   if (s && s->state == 1)
     textured_quad(s, (float)(int)(x + 0.5f), (float)(int)(y + 0.5f), colour);
@@ -1168,8 +1288,13 @@ typedef struct { int program, image, material; } draw_state_t;
 /* quad q, its element at `at`; false: out of command memory */
 static bool draw_quad(nvn_obj_t *cmd, const quad_t *q, size_t at, size_t materials, draw_state_t *st)
 {
-  if (g.cmd_free(cmd) < CMD_RESERVE)
+  if (g.cmd_free(cmd) < CMD_RESERVE) {
+    static bool warned;
+    if (!warned)
+      log_printf("gpu drawing: out of command memory in a frame of %d quads; the rest left out", n_quads);
+    warned = true;
     return false;
+  }
   int program = q->textured ? UI_PROGRAM_TEXTURE : UI_PROGRAM_SOLID;
   if (program != st->program) {
     g.cmd_program(cmd, &programs[program], STAGES_GRAPHICS);
@@ -1206,7 +1331,7 @@ bool gpuui_end(nvn_obj_t *cmd, const void *game_texture_pool, const void *game_s
   if (dirty_bottom > dirty_top) {
     g.cmd_copy_stride(cmd, 0);
     nvn_region_t rows = { 0, dirty_top, 0, ATLAS_W, dirty_bottom - dirty_top, 1 };
-    g.cmd_copy_to_texture(cmd, data_gpu + off_staging + (nvn_addr_t)dirty_top * ATLAS_W, &atlas, 0, &rows, 0);
+    g.cmd_copy_to_texture(cmd, data_gpu + off_staging + (nvn_addr_t)dirty_top * ATLAS_STRIDE, &atlas, 0, &rows, 0);
     g.cmd_barrier(cmd, BARRIER_ORDER_PRIMITIVES | BARRIER_ORDER_FRAGMENTS | BARRIER_INVALIDATE_TEXTURE);
     dirty_top = ATLAS_H;
     dirty_bottom = 0;

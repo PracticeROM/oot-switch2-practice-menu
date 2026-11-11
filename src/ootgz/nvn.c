@@ -34,6 +34,7 @@
 #include "nativeui.h"
 #include "scenedepth.h"
 #include "uishader.h"
+#include "got.h"
 #include "sys.h"
 
 /* --- NVN types: nvnapi.h ---------------------------------------------------------------------- */
@@ -66,7 +67,10 @@ enum {
 #define CLEAR_ALL_CHANNELS 0xF /* nvnCommandBufferClearColor's mask: R, G, B and A */
 #define SCISSOR_ALL 65535      /* a scissor size that covers any texture */
 
+typedef void *(*bootstrap_loader_t)(const char *name);
 extern void *nvnBootstrapLoader(const char *name); /* from sdk */
+/* what our wrapper calls: another module's wrapper hooked earlier, or the sdk's loader (got_hook) */
+static void *next_bootstrap_loader;
 void *aligned_alloc(size_t align, size_t size);     /* from main */
 void free(void *p);                                  /* from main */
 
@@ -231,9 +235,14 @@ static void *hook_getproc(nvn_device_t *dev, const char *name)
   return wrap_proc(name, real_getproc(dev, name));
 }
 
-void *nvn_bootstrap_hook(const char *name)
+static void *bootstrap_hook(const char *name)
 {
-  return wrap_proc(name, nvnBootstrapLoader(name));
+  return wrap_proc(name, ((bootstrap_loader_t)next_bootstrap_loader)(name));
+}
+
+const char *nvn_hook_game(uintptr_t main_base)
+{
+  return got_hook(main_base, "nvnBootstrapLoader", bootstrap_hook, nvnBootstrapLoader, &next_bootstrap_loader);
 }
 
 /* --- overlay ---------------------------------------------------------------------------------- */

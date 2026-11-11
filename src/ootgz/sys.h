@@ -27,6 +27,7 @@ typedef struct {
 
 #define SYS_PERM_R 1u
 #define SYS_PERM_W 2u
+#define SYS_PERM_X 4u
 
 uint32_t sys_query_memory(sys_meminfo_t *info, uint64_t addr);
 /* svcGetInfo for this process: 4/5 heap region address/size, 6 total memory, 7 used memory */

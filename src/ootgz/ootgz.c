@@ -33,7 +33,6 @@
 #include "warp.h"
 #include "watches.h"
 #include "nvn.h"
-#include "got.h"
 #include "ootgz_version.h"
 #include "pouch.h"
 #include "position.h"
@@ -468,7 +467,7 @@ __attribute__((used)) void ootgz_module_init(void)
   log_raw("frame hook installed");
 
   /* main's imports: NVN for drawing, nn::hid to hide input while the menu is open */
-  const char *error = got_hook(z64hd_main, "nvnBootstrapLoader", nvn_bootstrap_hook);
+  const char *error = nvn_hook_game(z64hd_main);
   log_raw(error ? "NVN hook failed" : "NVN hook installed");
   if (error)
     log_raw(error);

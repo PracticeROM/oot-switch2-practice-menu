@@ -161,6 +161,9 @@ int hid_public_1(void *, int, const uint32_t *) __asm__(PUBLIC("17NpadHandheldSt
 int hid_public_2(void *, int, const uint32_t *) __asm__(PUBLIC("16NpadJoyDualState"));
 int hid_public_3(void *, int, const uint32_t *) __asm__(PUBLIC("16NpadJoyLeftState"));
 int hid_public_4(void *, int, const uint32_t *) __asm__(PUBLIC("17NpadJoyRightState"));
+static void *const hid_public[N_HID] = { hid_public_0, hid_public_1, hid_public_2, hid_public_3, hid_public_4 };
+/* what each wrapper calls: another module's wrapper hooked earlier, or the sdk's function (got_hook) */
+static void *hid_next[N_HID];
 
 bool input_force_active;
 uint32_t input_force_buttons;
@@ -195,11 +198,11 @@ static void filter_game_states(void *states, int count)
   }
 }
 
-/* hid_wrap_N: the public GetNpadStates overload N, then filter_game_states */
+/* hid_wrap_N: whatever slot N held before (hid_next), then filter_game_states */
 #define WRAP(n)                                                     \
   static int hid_wrap_##n(void *out, int count, const uint32_t *id) \
   {                                                                 \
-    int result = hid_public_##n(out, count, id);                    \
+    int result = ((hid_public_t)hid_next[n])(out, count, id);       \
     filter_game_states(out, result < count ? result : count);       \
     return result;                                                  \
   }
@@ -211,7 +214,7 @@ const char *input_hook_game(uintptr_t main_base)
 {
   const char *last_error = 0;
   for (unsigned i = 0; i < N_HID; i++) {
-    const char *error = got_hook(main_base, hid_public_names[i], hid_wraps[i]);
+    const char *error = got_hook(main_base, hid_public_names[i], hid_wraps[i], hid_public[i], &hid_next[i]);
     if (error)
       last_error = error;
   }

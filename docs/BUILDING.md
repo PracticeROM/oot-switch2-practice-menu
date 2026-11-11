@@ -164,6 +164,14 @@ Lichii runs the game's own rtld, so a working load there is good evidence for ha
   dynamic section) for `nvnBootstrapLoader` and the five `nn::hid::GetNpadStates` overloads.
   Checked offline: the slot found for `nvnBootstrapLoader` is `main+0x4cbf710`, the one main's
   PLT stub at `main+0x3c42a90` jumps through. This doesn't depend on rtld's search order.
+  Each wrapper calls what its slot held before when that's another module's code (another
+  add-on's wrapper hooked earlier, or the sdk's function), so other add-ons that hook the same
+  imports keep working next to this one. main has no `BIND_NOW`: rtld binds its imports at their
+  first call, and until then a slot holds main's PLT0 (`main+0x3c41c50`), which takes the slot
+  address from x16 as the import's own PLT stub sets it. A wrapper calling PLT0 gets rtld's
+  "Unresolved symbol" and a jump to 0, or, when x16 happens to still hold the slot, a bound slot
+  with the wrapper written over. So a slot pointing into main is never chained to: the wrapper
+  calls the sdk's function, which this module imports (and rtld binds at load).
 - **NVN.** The game gets `nvnDeviceGetProcAddress` from the bootstrap loader and fetches every
   function by name through it (loader at `main+0x129e000`), so the wrapped GetProcAddress
   swaps in our `nvnQueuePresentTexture`, `nvnWindowBuilderSetTextures` and

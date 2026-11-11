@@ -744,7 +744,7 @@ static void measure_hint(const char *hint, int wrap_w, int *rows, int *width)
 
 /* The rows and width of the biggest hint any item of the menu can show, so the panel keeps one size
  * while in the menu. */
-static void measure_hints(const menu_t *menu, const char *current, int wrap_w, int *rows, int *width)
+static void measure_hints(const menu_t *menu, int wrap_w, int *rows, int *width)
 {
   *rows = 1;
   *width = 0;
@@ -755,7 +755,33 @@ static void measure_hints(const menu_t *menu, const char *current, int wrap_w, i
     for (int k = 0; item->part_hints && k < item->n_parts && k < MAX_PART_HINTS; k++)
       measure_hint(T(item->part_hints[k]), wrap_w, rows, width);
   }
-  measure_hint(current, wrap_w, rows, width);
+}
+
+/* The menu's measurements: the width of its widest item and the size of its biggest hint. Measuring writes
+ * out every item's line (its value read from the game) and wraps every hint, shown or not, so it isn't done
+ * each frame: only for another menu, when its items change, on a frame with a button held (what changes a
+ * value, the language or the text being typed), and every MEASURE_EVERY frames for the values that change by
+ * themselves. In between, a line shown that has grown still widens the panel by itself (gfx.c measures what's
+ * drawn); only a line that's scrolled out of sight is late. */
+#define MEASURE_EVERY 30
+static struct {
+  const menu_t *menu;
+  int n_items, age;
+  int items_w, wrap_w, hint_rows, hint_w;
+} measured;
+
+static void measure_menu(menu_t *menu)
+{
+  bool same = measured.menu == menu && measured.n_items == menu->n_items;
+  if (same && !input_held() && ++measured.age < MEASURE_EVERY)
+    return;
+  measured.menu = menu;
+  measured.n_items = menu->n_items;
+  measured.age = 0;
+  measured.items_w = items_width(menu);
+  int wrap_w = measured.items_w - ITEM_COL < HINT_MIN_W ? HINT_MIN_W : measured.items_w - ITEM_COL;
+  measured.wrap_w = wrap_w > GFX_COLS - ITEM_COL ? GFX_COLS - ITEM_COL : wrap_w;
+  measure_hints(menu, measured.wrap_w, &measured.hint_rows, &measured.hint_w);
 }
 
 /* Keeps the selection in view in the scrolling rows (those under the pinned ones). */
@@ -859,13 +885,12 @@ void menu_draw(void)
   }
   /* the items' width; hints wrap to it (at least HINT_MIN_W), and take as many rows as this menu's
    * longest hint, so the panel keeps one size while in the menu */
-  int items_w = items_width(menu);
-  int wrap_w = items_w - ITEM_COL < HINT_MIN_W ? HINT_MIN_W : items_w - ITEM_COL;
-  if (wrap_w > GFX_COLS - ITEM_COL)
-    wrap_w = GFX_COLS - ITEM_COL;
-  int hint_rows;
-  int hint_w;
-  measure_hints(menu, hint, wrap_w, &hint_rows, &hint_w);
+  measure_menu(menu);
+  int items_w = measured.items_w;
+  int wrap_w = measured.wrap_w;
+  int hint_rows = measured.hint_rows;
+  int hint_w = measured.hint_w;
+  measure_hint(hint, wrap_w, &hint_rows, &hint_w); /* the one shown now (an edit's hint is none of the items') */
 
   /* breadcrumb: root > ... > this menu, wrapped after a " >" to the panel's width (continuation lines
    * indented); a path longer than TITLE_MAX_ROWS keeps its end */

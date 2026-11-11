@@ -1,0 +1,2237 @@
+{
+ "source": "game files (tools/collectibles.py)",
+ "gold_skulltulas": [
+  {
+   "key": "6789388e9fb9c92c",
+   "maps": [
+    "BottomOfTheWell"
+   ],
+   "area": null,
+   "t": [
+    -8.22,
+    103.8,
+    -31.85
+   ],
+   "room": 5,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "a8d6182a5c956e16",
+   "maps": [
+    "BottomOfTheWell"
+   ],
+   "area": null,
+   "t": [
+    2.65,
+    103.8,
+    -30.5
+   ],
+   "room": 4,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "35fb354fac262d36",
+   "maps": [
+    "BottomOfTheWell"
+   ],
+   "area": null,
+   "t": [
+    31.99,
+    104.8,
+    -14.92
+   ],
+   "room": 7,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "fcd7f04dcf755e8e",
+   "maps": [
+    "DeathMountainCrater_Child"
+   ],
+   "area": null,
+   "t": [
+    -2.87,
+    128.19,
+    48.67
+   ],
+   "room": null,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": true
+  },
+  {
+   "key": "58c75badf059ca54",
+   "maps": [
+    "DeathMountainCrater_Child"
+   ],
+   "area": null,
+   "t": [
+    3.75,
+    111.22,
+    -0.75
+   ],
+   "room": null,
+   "night": false,
+   "bean_soil": true,
+   "pops_out": true
+  },
+  {
+   "key": "f5359b24fc86ac22",
+   "maps": [
+    "DeathMountainTrail_Adult"
+   ],
+   "area": null,
+   "t": [
+    -30.97,
+    125.08,
+    -17.96
+   ],
+   "room": null,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "0b8e43abfa0b5f86",
+   "maps": [
+    "DeathMountainTrail_Adult"
+   ],
+   "area": null,
+   "t": [
+    3.17,
+    187.3,
+    -111.29
+   ],
+   "room": null,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "04e03ac27985e328",
+   "maps": [
+    "DeathMountainTrail_Adult",
+    "DeathMountainTrail_Child"
+   ],
+   "area": null,
+   "t": [
+    -51.19,
+    102.8,
+    27.21
+   ],
+   "room": null,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "f1d32c06612da232",
+   "maps": [
+    "DeathMountainTrail_Child"
+   ],
+   "area": null,
+   "t": [
+    -45.5,
+    109.2,
+    -20.25
+   ],
+   "room": null,
+   "night": false,
+   "bean_soil": true,
+   "pops_out": true
+  },
+  {
+   "key": "d0f7e5ffa76ba288",
+   "maps": [
+    "DesertColossus_Adult",
+    "DesertColossus_Child"
+   ],
+   "area": null,
+   "t": [
+    -170.12,
+    101.76,
+    -47.87
+   ],
+   "room": null,
+   "night": true,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "9ae3d0ac392e6cda",
+   "maps": [
+    "DesertColossus_Adult",
+    "DesertColossus_Child"
+   ],
+   "area": null,
+   "t": [
+    -73.9,
+    105.3,
+    -5.68
+   ],
+   "room": null,
+   "night": true,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "0341f2c03598c861",
+   "maps": [
+    "DesertColossus_Child"
+   ],
+   "area": null,
+   "t": [
+    -157.46,
+    95.66,
+    17.19
+   ],
+   "room": null,
+   "night": false,
+   "bean_soil": true,
+   "pops_out": true
+  },
+  {
+   "key": "bdfe13c37f356829",
+   "maps": [
+    "DodongoCavern"
+   ],
+   "area": null,
+   "t": [
+    -48.84,
+    96.6,
+    -104.25
+   ],
+   "room": 20,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "758ce7b4868447fb",
+   "maps": [
+    "DodongoCavern"
+   ],
+   "area": null,
+   "t": [
+    -48.42,
+    120.31,
+    -40.12
+   ],
+   "room": 10,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "3f5b150f16d84603",
+   "maps": [
+    "DodongoCavern"
+   ],
+   "area": null,
+   "t": [
+    21.47,
+    112.4,
+    -55.93
+   ],
+   "room": 18,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "0d53e429a1ef383d",
+   "maps": [
+    "DodongoCavern"
+   ],
+   "area": null,
+   "t": [
+    58.18,
+    104.5,
+    -19.87
+   ],
+   "room": 2,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "10434342a3917ebd",
+   "maps": [
+    "DodongoCavern"
+   ],
+   "area": null,
+   "t": [
+    64.0,
+    98.55,
+    15.85
+   ],
+   "room": 3,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "cc175a90e0014905",
+   "maps": [
+    "FireTemple"
+   ],
+   "area": null,
+   "t": [
+    11.25,
+    101.5,
+    -43.24
+   ],
+   "room": 18,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "7f498ada1c2e9c7a",
+   "maps": [
+    "FireTemple"
+   ],
+   "area": null,
+   "t": [
+    36.57,
+    187.7,
+    -5.18
+   ],
+   "room": 8,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "4d1b7e35ca0c6484",
+   "maps": [
+    "FireTemple"
+   ],
+   "area": null,
+   "t": [
+    40.05,
+    189.1,
+    -19.75
+   ],
+   "room": 7,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "b0f77b17cfb37458",
+   "maps": [
+    "FireTemple"
+   ],
+   "area": null,
+   "t": [
+    59.04,
+    148.4,
+    -29.98
+   ],
+   "room": 5,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "5e3ae6a7cf3ac292",
+   "maps": [
+    "FireTemple"
+   ],
+   "area": null,
+   "t": [
+    67.73,
+    115.3,
+    -47.0
+   ],
+   "room": 19,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "984021bc20419ebe",
+   "maps": [
+    "ForestTemple"
+   ],
+   "area": null,
+   "t": [
+    -38.06,
+    112.86,
+    -4.38
+   ],
+   "room": 12,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "2aa39f00aaa2d331",
+   "maps": [
+    "ForestTemple"
+   ],
+   "area": null,
+   "t": [
+    -3.43,
+    65.6,
+    17.17
+   ],
+   "room": 27,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "f46b1710ed0620d1",
+   "maps": [
+    "ForestTemple"
+   ],
+   "area": null,
+   "t": [
+    8.82,
+    109.56,
+    -23.56
+   ],
+   "room": 2,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "99ca89963485df11",
+   "maps": [
+    "ForestTemple"
+   ],
+   "area": null,
+   "t": [
+    11.28,
+    119.84,
+    64.0
+   ],
+   "room": 0,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "1bf5f0176ef03bda",
+   "maps": [
+    "ForestTemple"
+   ],
+   "area": null,
+   "t": [
+    44.27,
+    112.07,
+    -38.24
+   ],
+   "room": 14,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "4e13cc311cd04df4",
+   "maps": [
+    "GanonCastle"
+   ],
+   "area": null,
+   "t": [
+    78.4,
+    94.1,
+    328.38
+   ],
+   "room": null,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "81ed4ed76699e3d8",
+   "maps": [
+    "GerudoFortress_Adult"
+   ],
+   "area": null,
+   "t": [
+    55.3,
+    131.87,
+    -70.22
+   ],
+   "room": null,
+   "night": true,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "b4ece769e6f3a206",
+   "maps": [
+    "GerudoFortress_Adult"
+   ],
+   "area": null,
+   "t": [
+    181.69,
+    125.56,
+    -88.61
+   ],
+   "room": null,
+   "night": true,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "bc85efca2b222cd9",
+   "maps": [
+    "GerudoValley_Adult"
+   ],
+   "area": null,
+   "t": [
+    -45.68,
+    106.23,
+    -35.56
+   ],
+   "room": null,
+   "night": true,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "a017ce09904c2dce",
+   "maps": [
+    "GerudoValley_Adult"
+   ],
+   "area": null,
+   "t": [
+    -34.53,
+    109.96,
+    10.28
+   ],
+   "room": null,
+   "night": true,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "738f5746cc517702",
+   "maps": [
+    "GerudoValley_Child"
+   ],
+   "area": null,
+   "t": [
+    -11.04,
+    48.04,
+    2.45
+   ],
+   "room": null,
+   "night": false,
+   "bean_soil": true,
+   "pops_out": true
+  },
+  {
+   "key": "d3d86d3d6988ed8c",
+   "maps": [
+    "GerudoValley_Child"
+   ],
+   "area": null,
+   "t": [
+    50.81,
+    97.4,
+    5.09
+   ],
+   "room": null,
+   "night": true,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "fbbc2d490276c68e",
+   "maps": [
+    "GoronCity_Adult"
+   ],
+   "area": null,
+   "t": [
+    0.49,
+    113.36,
+    -1.23
+   ],
+   "room": null,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "07e6e21142cc54db",
+   "maps": [
+    "GoronCity_Child"
+   ],
+   "area": null,
+   "t": [
+    -48.25,
+    113.68,
+    -7.84
+   ],
+   "room": null,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": true
+  },
+  {
+   "key": "032f42f523be6425",
+   "maps": [
+    "Graveyard_Adult",
+    "Graveyard_Child"
+   ],
+   "area": null,
+   "t": [
+    -20.2,
+    104.3,
+    26.4
+   ],
+   "room": null,
+   "night": true,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "e91f6be796358ffc",
+   "maps": [
+    "Graveyard_Child"
+   ],
+   "area": null,
+   "t": [
+    -12.15,
+    103.37,
+    -12.2
+   ],
+   "room": null,
+   "night": false,
+   "bean_soil": true,
+   "pops_out": true
+  },
+  {
+   "key": "ceed596f17934971",
+   "maps": [
+    "HountedWasteland_Adult",
+    "HountedWasteland_Child"
+   ],
+   "area": null,
+   "t": [
+    16.01,
+    88.85,
+    -99.8
+   ],
+   "room": null,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "22c0f7dff5ebb86d",
+   "maps": [
+    "HyruleCastle"
+   ],
+   "area": null,
+   "t": [
+    -12.36,
+    121.78,
+    -94.95
+   ],
+   "room": null,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": true
+  },
+  {
+   "key": "7f28485fa5d3688f",
+   "maps": [
+    "HyruleCastle"
+   ],
+   "area": null,
+   "t": [
+    39.05,
+    101.05,
+    -116.13
+   ],
+   "room": null,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "0af4d6f063d3ae9f",
+   "maps": [
+    "HyruleField_Adult"
+   ],
+   "area": "LakeHylia",
+   "area_approximate": true,
+   "t": [
+    -196.95,
+    150.28,
+    517.38
+   ],
+   "room": null,
+   "night": true,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "6689bdebc95368eb",
+   "maps": [
+    "HyruleField_Adult"
+   ],
+   "area": "LakeHylia",
+   "area_approximate": true,
+   "t": [
+    -175.11,
+    128.46,
+    415.59
+   ],
+   "room": null,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": true
+  },
+  {
+   "key": "7d8ec14bdd1f6341",
+   "maps": [
+    "HyruleField_Adult"
+   ],
+   "area": null,
+   "t": [
+    56.51,
+    126.33,
+    342.58
+   ],
+   "room": null,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": true
+  },
+  {
+   "key": "781e0de8eed42373",
+   "maps": [
+    "HyruleField_Adult",
+    "HyruleField_Child"
+   ],
+   "area": "LakeHylia",
+   "area_approximate": true,
+   "t": [
+    -295.62,
+    131.98,
+    597.77
+   ],
+   "room": null,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "a6a4e87da18fa678",
+   "maps": [
+    "HyruleField_Adult",
+    "HyruleField_Child"
+   ],
+   "area": null,
+   "t": [
+    -147.92,
+    129.89,
+    322.5
+   ],
+   "room": null,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "25e6072d4df023b3",
+   "maps": [
+    "HyruleField_Adult",
+    "HyruleField_Child"
+   ],
+   "area": "LonLonRanch",
+   "t": [
+    -147.44,
+    159.21,
+    268.23
+   ],
+   "room": null,
+   "night": true,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "04be4a8ff29f2099",
+   "maps": [
+    "HyruleField_Adult",
+    "HyruleField_Child"
+   ],
+   "area": "LonLonRanch",
+   "t": [
+    -39.55,
+    158.25,
+    200.67
+   ],
+   "room": null,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": true
+  },
+  {
+   "key": "1e38e8d23596eecf",
+   "maps": [
+    "HyruleField_Adult",
+    "HyruleField_Child"
+   ],
+   "area": null,
+   "t": [
+    70.53,
+    167.41,
+    263.84
+   ],
+   "room": null,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": true
+  },
+  {
+   "key": "c1858a4fcd84a28e",
+   "maps": [
+    "HyruleField_Child"
+   ],
+   "area": "LakeHylia",
+   "area_approximate": true,
+   "t": [
+    -178.25,
+    141.96,
+    426.4
+   ],
+   "room": null,
+   "night": true,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "61576befd16c499a",
+   "maps": [
+    "HyruleField_Child"
+   ],
+   "area": "LakeHylia",
+   "area_approximate": true,
+   "t": [
+    -167.69,
+    137.9,
+    413.48
+   ],
+   "room": null,
+   "night": false,
+   "bean_soil": true,
+   "pops_out": true
+  },
+  {
+   "key": "dc8113831c56b194",
+   "maps": [
+    "HyruleField_Child"
+   ],
+   "area": "LonLonRanch",
+   "t": [
+    -63.22,
+    156.39,
+    212.39
+   ],
+   "room": null,
+   "night": true,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "cdb49f5d0a67fcf6",
+   "maps": [
+    "IceCavern"
+   ],
+   "area": null,
+   "t": [
+    -18.13,
+    108.68,
+    -16.56
+   ],
+   "room": 8,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "63701a2cf70b201c",
+   "maps": [
+    "IceCavern"
+   ],
+   "area": null,
+   "t": [
+    -1.42,
+    107.23,
+    -6.2
+   ],
+   "room": 3,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "165fc0bc0aca1f6c",
+   "maps": [
+    "IceCavern"
+   ],
+   "area": null,
+   "t": [
+    83.67,
+    108.25,
+    -0.45
+   ],
+   "room": 6,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "9c95fd41b89c058a",
+   "maps": [
+    "InsideJabuJabuBelly"
+   ],
+   "area": null,
+   "t": [
+    -15.36,
+    90.34,
+    -82.93
+   ],
+   "room": 3,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "c03f282ff60942b6",
+   "maps": [
+    "InsideJabuJabuBelly"
+   ],
+   "area": null,
+   "t": [
+    -2.21,
+    88.41,
+    -94.96
+   ],
+   "room": 3,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "9fc92497f014dbd5",
+   "maps": [
+    "InsideJabuJabuBelly"
+   ],
+   "area": null,
+   "t": [
+    17.37,
+    81.72,
+    -59.28
+   ],
+   "room": 14,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "ddd260afb6f2989a",
+   "maps": [
+    "InsideJabuJabuBelly"
+   ],
+   "area": null,
+   "t": [
+    38.29,
+    106.12,
+    -49.09
+   ],
+   "room": 5,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "f2e27d6a27026acf",
+   "maps": [
+    "InsideTheDekuTree"
+   ],
+   "area": null,
+   "t": [
+    -81.9,
+    86.69,
+    -7.4
+   ],
+   "room": 11,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "bce05898ce61f1c0",
+   "maps": [
+    "InsideTheDekuTree"
+   ],
+   "area": null,
+   "t": [
+    -29.76,
+    121.0,
+    13.04
+   ],
+   "room": 3,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "fad8931a0011e1d4",
+   "maps": [
+    "InsideTheDekuTree"
+   ],
+   "area": null,
+   "t": [
+    -18.13,
+    78.69,
+    -12.98
+   ],
+   "room": 4,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "df73f3739cef466b",
+   "maps": [
+    "InsideTheDekuTree"
+   ],
+   "area": null,
+   "t": [
+    3.32,
+    86.86,
+    1.13
+   ],
+   "room": 4,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "2df265292516bdf0",
+   "maps": [
+    "KakarikoVillage_Adult",
+    "KakarikoVillage_Adult_Alternative"
+   ],
+   "area": null,
+   "t": [
+    -38.74,
+    113.7,
+    115.48
+   ],
+   "room": null,
+   "night": true,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "a1632e322c612b97",
+   "maps": [
+    "KakarikoVillage_Child"
+   ],
+   "area": null,
+   "t": [
+    -75.01,
+    105.29,
+    2.17
+   ],
+   "room": null,
+   "night": true,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "6a8d9b2373d08fcb",
+   "maps": [
+    "KakarikoVillage_Child"
+   ],
+   "area": null,
+   "t": [
+    -73.6,
+    104.46,
+    43.48
+   ],
+   "room": null,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": true
+  },
+  {
+   "key": "c3c68d0ac4b85831",
+   "maps": [
+    "KakarikoVillage_Child"
+   ],
+   "area": null,
+   "t": [
+    -60.71,
+    102.13,
+    59.55
+   ],
+   "room": null,
+   "night": true,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "d1cef51cf294fb86",
+   "maps": [
+    "KakarikoVillage_Child"
+   ],
+   "area": null,
+   "t": [
+    -48.11,
+    110.91,
+    18.4
+   ],
+   "room": null,
+   "night": true,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "d4883a16973b1d06",
+   "maps": [
+    "KakarikoVillage_Child"
+   ],
+   "area": null,
+   "t": [
+    -29.08,
+    103.09,
+    60.51
+   ],
+   "room": null,
+   "night": true,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "62c340f0b876c195",
+   "maps": [
+    "KokiriForest_Adult"
+   ],
+   "area": null,
+   "t": [
+    18.04,
+    117.17,
+    18.88
+   ],
+   "room": null,
+   "night": true,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "ecdc46b409ed7d38",
+   "maps": [
+    "KokiriForest_Child"
+   ],
+   "area": null,
+   "t": [
+    -83.79,
+    117.85,
+    -17.62
+   ],
+   "room": null,
+   "night": true,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "858f5000ad57b2cc",
+   "maps": [
+    "KokiriForest_Child"
+   ],
+   "area": null,
+   "t": [
+    8.24,
+    112.64,
+    -23.31
+   ],
+   "room": null,
+   "night": false,
+   "bean_soil": true,
+   "pops_out": true
+  },
+  {
+   "key": "3c2b585ac5c0443e",
+   "maps": [
+    "LostWood_Adult",
+    "LostWood_Child"
+   ],
+   "area": null,
+   "t": [
+    14.45,
+    105.85,
+    -56.42
+   ],
+   "room": null,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "8186bcb07d6c2cf9",
+   "maps": [
+    "LostWood_Child"
+   ],
+   "area": null,
+   "t": [
+    -33.19,
+    100.17,
+    31.42
+   ],
+   "room": null,
+   "night": false,
+   "bean_soil": true,
+   "pops_out": true
+  },
+  {
+   "key": "f6fa6ef0ca152948",
+   "maps": [
+    "LostWood_Child"
+   ],
+   "area": null,
+   "t": [
+    10.87,
+    99.78,
+    -52.07
+   ],
+   "room": null,
+   "night": false,
+   "bean_soil": true,
+   "pops_out": true
+  },
+  {
+   "key": "7c1a05315f83c34d",
+   "maps": [
+    "Market_Child"
+   ],
+   "area": null,
+   "t": [
+    17.38,
+    102.1,
+    58.36
+   ],
+   "room": null,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": true
+  },
+  {
+   "key": "c8db3346f78ea31b",
+   "maps": [
+    "SacredForestMeadow_Adult"
+   ],
+   "area": null,
+   "t": [
+    7.75,
+    107.38,
+    13.21
+   ],
+   "room": null,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "8e87908cb035e950",
+   "maps": [
+    "ShadowTemple"
+   ],
+   "area": null,
+   "t": [
+    -212.27,
+    41.3,
+    -37.4
+   ],
+   "room": 20,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": true
+  },
+  {
+   "key": "d23a7a2c9eced9ce",
+   "maps": [
+    "ShadowTemple"
+   ],
+   "area": null,
+   "t": [
+    33.37,
+    73.77,
+    86.2
+   ],
+   "room": 11,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "d7ffbe169189e50d",
+   "maps": [
+    "ShadowTemple"
+   ],
+   "area": null,
+   "t": [
+    75.84,
+    53.41,
+    6.33
+   ],
+   "room": 14,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "7a74bc651f9fe024",
+   "maps": [
+    "ShadowTemple"
+   ],
+   "area": null,
+   "t": [
+    104.61,
+    52.01,
+    -39.79
+   ],
+   "room": 17,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "eafe60e592e9a3fb",
+   "maps": [
+    "ShadowTemple"
+   ],
+   "area": null,
+   "t": [
+    179.79,
+    62.47,
+    96.86
+   ],
+   "room": 31,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "8c8bb95471d20d02",
+   "maps": [
+    "SpiritTemple"
+   ],
+   "area": null,
+   "t": [
+    -55.69,
+    136.63,
+    -7.3
+   ],
+   "room": 10,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "4696b2730de0516c",
+   "maps": [
+    "SpiritTemple"
+   ],
+   "area": null,
+   "t": [
+    -23.09,
+    129.67,
+    -66.68
+   ],
+   "room": 7,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "9222e742b73d3d2c",
+   "maps": [
+    "SpiritTemple"
+   ],
+   "area": null,
+   "t": [
+    -9.59,
+    107.42,
+    -56.0
+   ],
+   "room": 4,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "b3d9f353599eea53",
+   "maps": [
+    "SpiritTemple"
+   ],
+   "area": null,
+   "t": [
+    14.75,
+    115.15,
+    -68.79
+   ],
+   "room": 7,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "70b0fca66ca4808a",
+   "maps": [
+    "SpiritTemple"
+   ],
+   "area": null,
+   "t": [
+    38.96,
+    104.17,
+    -62.89
+   ],
+   "room": 15,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "d731ea6a04d0fd01",
+   "maps": [
+    "WaterTemple"
+   ],
+   "area": null,
+   "t": [
+    -54.54,
+    114.01,
+    -59.25
+   ],
+   "room": 21,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "a0973706f6415ecd",
+   "maps": [
+    "WaterTemple"
+   ],
+   "area": null,
+   "t": [
+    -1.19,
+    125.95,
+    -7.9
+   ],
+   "room": 1,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "e03a2965df9f7b30",
+   "maps": [
+    "WaterTemple"
+   ],
+   "area": null,
+   "t": [
+    1.4,
+    95.15,
+    0.55
+   ],
+   "room": 2,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "02974596f92cf377",
+   "maps": [
+    "WaterTemple"
+   ],
+   "area": null,
+   "t": [
+    18.65,
+    107.5,
+    -65.66
+   ],
+   "room": 24,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "3d0de5adaeb73cc9",
+   "maps": [
+    "WaterTemple"
+   ],
+   "area": null,
+   "t": [
+    35.08,
+    112.5,
+    -9.55
+   ],
+   "room": 25,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "853b892663c0215d",
+   "maps": [
+    "ZoraDomain_Adult",
+    "ZoraDomain_Adult_Alternative"
+   ],
+   "area": null,
+   "t": [
+    17.29,
+    115.47,
+    2.72
+   ],
+   "room": null,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "845ba51dc18c855e",
+   "maps": [
+    "ZoraFountain_Adult",
+    "ZoraFountain_Child"
+   ],
+   "area": null,
+   "t": [
+    79.96,
+    133.36,
+    12.9
+   ],
+   "room": null,
+   "night": true,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "63446d12663daa83",
+   "maps": [
+    "ZoraFountain_Child"
+   ],
+   "area": null,
+   "t": [
+    14.04,
+    107.79,
+    22.82
+   ],
+   "room": null,
+   "night": true,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "f0dac245e2fc448e",
+   "maps": [
+    "ZoraFountain_Child"
+   ],
+   "area": null,
+   "t": [
+    49.31,
+    110.37,
+    32.04
+   ],
+   "room": null,
+   "night": false,
+   "bean_soil": false,
+   "pops_out": true
+  },
+  {
+   "key": "97824c2ffeaa877c",
+   "maps": [
+    "ZoraRiver_Adult"
+   ],
+   "area": null,
+   "t": [
+    -35.0,
+    118.75,
+    12.5
+   ],
+   "room": null,
+   "night": true,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "8325fea55edfbe97",
+   "maps": [
+    "ZoraRiver_Adult"
+   ],
+   "area": null,
+   "t": [
+    76.28,
+    126.8,
+    -46.41
+   ],
+   "room": null,
+   "night": true,
+   "bean_soil": false,
+   "pops_out": false
+  },
+  {
+   "key": "abad0e9f0d471156",
+   "maps": [
+    "ZoraRiver_Child"
+   ],
+   "area": null,
+   "t": [
+    -54.56,
+    100.6,
+    -11.86
+   ],
+   "room": null,
+   "night": false,
+   "bean_soil": true,
+   "pops_out": true
+  },
+  {
+   "key": "78ae4fd90b3cfaaa",
+   "maps": [
+    "ZoraRiver_Child"
+   ],
+   "area": null,
+   "t": [
+    112.6,
+    111.8,
+    -48.8
+   ],
+   "room": null,
+   "night": true,
+   "bean_soil": false,
+   "pops_out": false
+  }
+ ],
+ "heart_containers": [
+  {
+   "key": "5262cea56c53554d",
+   "maps": [
+    "DodongoCavern"
+   ],
+   "area": null,
+   "t": [
+    24.0,
+    73.25,
+    -66.5
+   ]
+  },
+  {
+   "key": "8389cafb1277d318",
+   "maps": [
+    "FireTemple"
+   ],
+   "area": null,
+   "t": [
+    -76.37,
+    102.5,
+    0.0
+   ]
+  },
+  {
+   "key": "ff11593a22778e7e",
+   "maps": [
+    "ForestTemple"
+   ],
+   "area": null,
+   "t": [
+    -3.24,
+    74.73,
+    -64.43
+   ]
+  },
+  {
+   "key": "f45f5319d88e7ac7",
+   "maps": [
+    "InsideJabuJabuBelly"
+   ],
+   "area": null,
+   "t": [
+    42.4,
+    102.01,
+    -108.17
+   ]
+  },
+  {
+   "key": "f914fa367471a3e3",
+   "maps": [
+    "InsideTheDekuTree"
+   ],
+   "area": null,
+   "t": [
+    17.31,
+    47.0,
+    67.63
+   ]
+  },
+  {
+   "key": "f43ccb260f5576dc",
+   "maps": [
+    "ShadowTemple"
+   ],
+   "area": null,
+   "t": [
+    -138.33,
+    -11.46,
+    26.01
+   ]
+  },
+  {
+   "key": "41811f125b1eedd5",
+   "maps": [
+    "SpiritTemple"
+   ],
+   "area": null,
+   "t": [
+    -2.7,
+    142.25,
+    -160.58
+   ]
+  },
+  {
+   "key": "c835e1d03656bf46",
+   "maps": [
+    "WaterTemple"
+   ],
+   "area": null,
+   "t": [
+    -4.5,
+    124.36,
+    -88.05
+   ]
+  }
+ ],
+ "heart_pieces": [
+  {
+   "kind": "free-standing",
+   "key": "0a564328faf93c71",
+   "maps": [
+    "DeathMountainCrater_Adult",
+    "DeathMountainCrater_Child"
+   ],
+   "area": null,
+   "t": [
+    -17.5,
+    127.15,
+    3.95
+   ]
+  },
+  {
+   "kind": "free-standing",
+   "key": "8f5f3d3321aeb7cd",
+   "maps": [
+    "DeathMountainCrater_Adult",
+    "DeathMountainCrater_Child"
+   ],
+   "area": null,
+   "t": [
+    -0.5,
+    116.77,
+    32.34
+   ]
+  },
+  {
+   "kind": "event",
+   "flag": "DeathMountain_Enemy_Scrub_Business_HeartPiece_01",
+   "hash": "6b8fc751",
+   "maps": [
+    "DeathMountainCrater_Child"
+   ],
+   "area": null,
+   "t": [
+    -23.0,
+    121.1,
+    33.0
+   ]
+  },
+  {
+   "kind": "free-standing",
+   "key": "09ecb6a0150fee97",
+   "maps": [
+    "DeathMountainTrail_Adult",
+    "DeathMountainTrail_Child"
+   ],
+   "area": null,
+   "t": [
+    -39.66,
+    122.21,
+    -26.0
+   ]
+  },
+  {
+   "kind": "free-standing",
+   "key": "92feab9a9810c619",
+   "maps": [
+    "DesertColossus_Adult",
+    "DesertColossus_Child"
+   ],
+   "area": null,
+   "t": [
+    -137.14,
+    103.5,
+    10.5
+   ]
+  },
+  {
+   "kind": "chest",
+   "flag": "IsTreasureBoxOpen.12343753510713797715",
+   "hash": "689cebe8",
+   "maps": [
+    "GerudoFortress_Adult"
+   ],
+   "area": null,
+   "t": [
+    28.98,
+    131.52,
+    -93.67
+   ]
+  },
+  {
+   "kind": "event",
+   "flag": "MiniGame_HorsebackArchery_GotaHeart",
+   "hash": "3f43245b",
+   "maps": [
+    "GerudoFortress_Adult"
+   ],
+   "area": null,
+   "t": [
+    70.48,
+    115.0,
+    37.42
+   ]
+  },
+  {
+   "kind": "chest",
+   "flag": "IsTreasureBoxOpen.15856256242099990922",
+   "hash": "7001f17c",
+   "maps": [
+    "GerudoValley_Adult",
+    "GerudoValley_Child"
+   ],
+   "area": null,
+   "t": [
+    -9.79,
+    90.43,
+    34.98
+   ]
+  },
+  {
+   "kind": "free-standing",
+   "key": "dfd66c63357cdea7",
+   "maps": [
+    "GerudoValley_Adult",
+    "GerudoValley_Child"
+   ],
+   "area": null,
+   "t": [
+    4.85,
+    59.16,
+    -78.16
+   ]
+  },
+  {
+   "kind": "event",
+   "flag": "GoronLargePot_IsGetHeartPiece",
+   "hash": "1d1793e9",
+   "maps": [
+    "GoronCity_Child"
+   ],
+   "area": null,
+   "t": [
+    0.0,
+    105.5,
+    0.0
+   ]
+  },
+  {
+   "kind": "chest",
+   "flag": "UnderTheGrave_DampeRace_HeartGeted",
+   "hash": "5a66513c",
+   "maps": [
+    "Graveyard_Adult"
+   ],
+   "area": null,
+   "t": [
+    -7.66,
+    103.42,
+    -10.92
+   ]
+  },
+  {
+   "kind": "free-standing",
+   "key": "1df0dbf50c1732b7",
+   "maps": [
+    "Graveyard_Adult",
+    "Graveyard_Child"
+   ],
+   "area": null,
+   "t": [
+    -16.58,
+    108.06,
+    -8.92
+   ]
+  },
+  {
+   "kind": "chest",
+   "flag": "IsTreasureBoxOpen.9622128545943056087",
+   "hash": "9c89c565",
+   "maps": [
+    "Graveyard_Adult",
+    "Graveyard_Child"
+   ],
+   "area": null,
+   "t": [
+    21.39,
+    105.05,
+    23.15
+   ]
+  },
+  {
+   "kind": "event",
+   "flag": "GraveYard_DiggingHoleTour_Drop_HeartPiece",
+   "hash": "b5127e75",
+   "maps": [
+    "Graveyard_Child"
+   ],
+   "area": null,
+   "t": [
+    -4.63,
+    103.13,
+    -1.82
+   ]
+  },
+  {
+   "kind": "free-standing",
+   "key": "baec91d6ed8dd96b",
+   "maps": [
+    "HyruleField_Adult"
+   ],
+   "area": "LakeHylia",
+   "area_approximate": true,
+   "t": [
+    -180.58,
+    163.09,
+    424.97
+   ]
+  },
+  {
+   "kind": "chest",
+   "flag": "IsTreasureBoxOpen.2967378296224661060",
+   "hash": "da9dff2c",
+   "maps": [
+    "HyruleField_Adult",
+    "HyruleField_Child"
+   ],
+   "area": null,
+   "t": [
+    -213.45,
+    133.42,
+    138.39
+   ]
+  },
+  {
+   "kind": "event",
+   "flag": "Npc_Hylia_045_HasDived",
+   "hash": "ad7a21ce",
+   "maps": [
+    "HyruleField_Adult",
+    "HyruleField_Child"
+   ],
+   "area": "LakeHylia",
+   "area_approximate": true,
+   "t": [
+    -174.39,
+    138.0,
+    418.02
+   ]
+  },
+  {
+   "kind": "free-standing",
+   "key": "88358af5b5300aa9",
+   "maps": [
+    "HyruleField_Child"
+   ],
+   "area": "LonLonRanch",
+   "t": [
+    -157.15,
+    150.93,
+    266.44
+   ]
+  },
+  {
+   "kind": "event",
+   "flag": "MiniGame_Fishing_GetHeartPiece",
+   "hash": "f1891f6e",
+   "maps": [
+    "HyruleField_Child"
+   ],
+   "area": "LakeHylia",
+   "area_approximate": true,
+   "t": [
+    -98.82,
+    134.76,
+    493.29
+   ]
+  },
+  {
+   "kind": "event",
+   "flag": "HyruleField_Enemy_Scrub_Business_HeartPiece_01",
+   "hash": "e41e1597",
+   "maps": [
+    "HyruleField_Child"
+   ],
+   "area": null,
+   "t": [
+    39.86,
+    152.45,
+    26.58
+   ]
+  },
+  {
+   "kind": "free-standing",
+   "key": "f8c7601da7dd887e",
+   "maps": [
+    "KakarikoVillage_Adult",
+    "KakarikoVillage_Adult_Alternative",
+    "KakarikoVillage_Child"
+   ],
+   "area": null,
+   "t": [
+    -44.08,
+    107.97,
+    112.0
+   ]
+  },
+  {
+   "kind": "event",
+   "flag": "Npc_Hylia_001_IsGetHeartPiece",
+   "hash": "a666baa8",
+   "maps": [
+    "KakarikoVillage_Adult",
+    "KakarikoVillage_Adult_Alternative",
+    "KakarikoVillage_Child"
+   ],
+   "area": null,
+   "t": [
+    -36.1,
+    107.5,
+    28.97
+   ]
+  },
+  {
+   "kind": "event",
+   "flag": "KakarikoVillage_GatheringTokenGold_GetReward50",
+   "hash": "e3c6e4a3",
+   "maps": [
+    "KakarikoVillage_Adult",
+    "KakarikoVillage_Adult_Alternative",
+    "KakarikoVillage_Child"
+   ],
+   "area": null,
+   "t": [
+    -27.76,
+    103.21,
+    80.59
+   ]
+  },
+  {
+   "kind": "free-standing",
+   "key": "b9d0070b468f26d2",
+   "maps": [
+    "KakarikoVillage_Adult",
+    "KakarikoVillage_Adult_Alternative",
+    "KakarikoVillage_Child"
+   ],
+   "area": null,
+   "t": [
+    1.48,
+    108.9,
+    37.52
+   ]
+  },
+  {
+   "kind": "event",
+   "flag": "Npc_SkullKid_Child_IsGetHeartPiece",
+   "hash": "5ff7aa30",
+   "maps": [
+    "LostWood_Child"
+   ],
+   "area": null,
+   "t": [
+    -34.01,
+    104.5,
+    -3.74
+   ]
+  },
+  {
+   "kind": "event",
+   "flag": "Minigame_SkullKidSession_IsGetHeartPiece",
+   "hash": "1657d7d8",
+   "maps": [
+    "LostWood_Child"
+   ],
+   "area": null,
+   "t": [
+    48.76,
+    98.34,
+    16.03
+   ]
+  },
+  {
+   "kind": "event",
+   "flag": "MiniGame_ChoiceTreasure_IsClear",
+   "hash": "b599aeed",
+   "maps": [
+    "Market_Child"
+   ],
+   "area": null,
+   "t": [
+    -62.9,
+    110.67,
+    12.55
+   ]
+  },
+  {
+   "kind": "event",
+   "flag": "MiniGame_BombchuBowling_ClearThirdTime",
+   "hash": "61cf7ba1",
+   "maps": [
+    "Market_Child"
+   ],
+   "area": null,
+   "t": [
+    -22.01,
+    109.97,
+    9.21
+   ]
+  },
+  {
+   "kind": "event",
+   "flag": "SubEvent_FindRichard_GetHeartPiece",
+   "hash": "f2fab510",
+   "maps": [
+    "Market_Child"
+   ],
+   "area": null,
+   "t": [
+    1.66,
+    100.09,
+    26.6
+   ]
+  },
+  {
+   "kind": "chest",
+   "flag": "IsTreasureBoxOpen.3130048366421939233",
+   "hash": "a1678ed9",
+   "maps": [
+    "ZoraDomain_Child"
+   ],
+   "area": null,
+   "t": [
+    28.8,
+    100.5,
+    -4.88
+   ]
+  },
+  {
+   "kind": "free-standing",
+   "key": "6f736fc80f7b0aca",
+   "maps": [
+    "ZoraFountain_Adult"
+   ],
+   "area": null,
+   "t": [
+    56.83,
+    70.93,
+    -27.4
+   ]
+  },
+  {
+   "kind": "free-standing",
+   "key": "ac2e26b5ec7da3a2",
+   "maps": [
+    "ZoraFountain_Adult"
+   ],
+   "area": null,
+   "t": [
+    85.03,
+    103.07,
+    -34.74
+   ]
+  },
+  {
+   "kind": "free-standing",
+   "key": "9efabd5b0516c341",
+   "maps": [
+    "ZoraRiver_Adult",
+    "ZoraRiver_Child"
+   ],
+   "area": null,
+   "t": [
+    -4.0,
+    111.42,
+    -34.3
+   ]
+  },
+  {
+   "kind": "free-standing",
+   "key": "3a23b59eaedc0510",
+   "maps": [
+    "ZoraRiver_Adult",
+    "ZoraRiver_Child"
+   ],
+   "area": null,
+   "t": [
+    99.5,
+    120.1,
+    -61.74
+   ]
+  },
+  {
+   "kind": "event",
+   "flag": "MiniGame_FrogTenors_StormSong",
+   "hash": "d578df95",
+   "maps": [
+    "ZoraRiver_Child"
+   ],
+   "area": null,
+   "t": [
+    8.99,
+    101.89,
+    -50.85
+   ]
+  },
+  {
+   "kind": "event",
+   "flag": "MiniGame_FrogTenors_InsectRepellent",
+   "hash": "8ffec767",
+   "maps": [
+    "ZoraRiver_Child"
+   ],
+   "area": null,
+   "t": [
+    8.99,
+    101.89,
+    -50.85
+   ]
+  }
+ ]
+}

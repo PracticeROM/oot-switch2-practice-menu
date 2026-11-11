@@ -1257,6 +1257,153 @@ static void build_dungeon_items(void)
   menu_add_return(&m_dungeon_items);
 }
 
+/* collectibles: how many of each kind the save has; L lists the missing ones (FINDINGS 5.22) */
+static menu_t m_collectibles, m_missing;
+
+typedef struct {
+  const char *name;
+  const collectible_t *items;
+  const int *count;
+} collectible_kind_t;
+
+static const collectible_kind_t collectible_kinds[] = {
+  { "gold skulltulas", data_gold_skulltulas, &data_n_gold_skulltulas },
+  { "heart containers", data_heart_containers, &data_n_heart_containers },
+  { "pieces of heart", data_heart_pieces, &data_n_heart_pieces },
+};
+
+static bool collectible_got(const collectible_t *item, bool *got)
+{
+  return item->key ? gd_get_bool64(item->key, got) : gd_get_bool(item->flag, got);
+}
+
+/* how many of a kind the save has, or -1 if a flag can't be read */
+static int collectibles_got(const collectible_kind_t *kind)
+{
+  int got = 0;
+  for (int i = 0; i < *kind->count; i++) {
+    bool has;
+    if (!collectible_got(&kind->items[i], &has))
+      return -1;
+    got += has;
+  }
+  return got;
+}
+
+/* it->data: the kind */
+static void text_collectible_count(menu_item_t *it, char *buf, int len)
+{
+  const collectible_kind_t *kind = &collectible_kinds[it->data];
+  int got = collectibles_got(kind);
+  if (got < 0)
+    snprintf(buf, len, "-/%d", *kind->count);
+  else
+    snprintf(buf, len, "%d/%d", got, *kind->count);
+}
+
+/* buf holds n characters: adds ", part" (just part if it's the first) and returns the new length */
+static int add_part(char *buf, int len, int n, const char *part)
+{
+  int added = snprintf(buf + n, (size_t)(len - n), "%s%s", n ? ", " : "", part);
+  if (added < 0)
+    return n;
+  return n + added < len ? n + added : len - 1;
+}
+
+/* it->data: the collectible: what it is, then where (in link > position's units) */
+static void text_missing(menu_item_t *it, char *buf, int len)
+{
+  static const char *const age_names[] = { [CA_CHILD] = "child", [CA_ADULT] = "adult", [CA_ANY] = "any age" };
+  const collectible_t *item = (const collectible_t *)it->data;
+  int n = 0;
+  buf[0] = 0;
+  if (item->age != CA_NONE && item->age < ARRAY_LEN(age_names))
+    n = add_part(buf, len, n, T(age_names[item->age]));
+  if (item->room >= 0) {
+    char room[24];
+    snprintf(room, sizeof(room), TF("room %d"), item->room);
+    n = add_part(buf, len, n, room);
+  }
+  if (item->traits & CT_NIGHT)
+    n = add_part(buf, len, n, T("night"));
+  if (item->traits & CT_BEAN_SOIL) /* these all pop out (of the soil) too */
+    n = add_part(buf, len, n, T("bean soil"));
+  else if (item->traits & CT_POPS_OUT)
+    n = add_part(buf, len, n, T("pops out"));
+  if (item->what)
+    n = add_part(buf, len, n, T(item->what));
+  snprintf(buf + n, (size_t)(len - n), "%s(%d, %d, %d)", n ? "  " : "", item->pos[0], item->pos[1], item->pos[2]);
+}
+
+/* it->data: an English line */
+static void text_note(menu_item_t *it, char *buf, int len)
+{
+  snprintf(buf, len, "%s", T((const char *)it->data));
+}
+
+/* it->data: the kind. Its missing ones, under a heading for each place (the data is sorted by place). */
+static void act_list_missing(menu_item_t *it)
+{
+  const collectible_kind_t *kind = &collectible_kinds[it->data];
+  menu_reset(&m_missing);
+  m_missing.title = kind->name;
+  m_missing.selected = m_missing.scroll = 0;
+  if (collectibles_got(kind) < 0) {
+    menu_add_text(&m_missing, text_note, (intptr_t) "can't read the save's flags");
+  } else {
+    const char *place = 0;
+    for (int i = 0; i < *kind->count; i++) {
+      const collectible_t *item = &kind->items[i];
+      bool got;
+      if (!collectible_got(item, &got) || got)
+        continue;
+      if (!place || !strings_equal(place, item->place))
+        menu_add_heading(&m_missing, item->place);
+      place = item->place;
+      menu_item_t *row = menu_add_action(&m_missing, "", 0, (intptr_t)item);
+      if (row)
+        row->text = text_missing;
+    }
+    if (!place)
+      menu_add_text(&m_missing, text_note, (intptr_t) "none missing");
+  }
+  menu_end_group(&m_missing);
+  menu_add_return(&m_missing);
+  menu_refresh(&m_missing);
+  menu_goto(&m_missing);
+}
+
+/* the most lines a list of missing ones can need: each item and its place's heading, a note and return */
+static int missing_lines(void)
+{
+  int most = 0;
+  for (int k = 0; k < ARRAY_LEN(collectible_kinds); k++) {
+    const collectible_kind_t *kind = &collectible_kinds[k];
+    int lines = *kind->count + 2;
+    for (int i = 0; i < *kind->count; i++)
+      lines += i == 0 || !strings_equal(kind->items[i].place, kind->items[i - 1].place);
+    if (lines > most)
+      most = lines;
+  }
+  return most;
+}
+
+static void build_collectibles(void)
+{
+  menu_init(&m_collectibles, "collectibles", ARRAY_LEN(collectible_kinds) + 1);
+  for (int k = 0; k < ARRAY_LEN(collectible_kinds); k++) {
+    menu_item_t *count = menu_add_action(&m_collectibles, collectible_kinds[k].name, act_list_missing, k);
+    if (count) {
+      count->text = text_collectible_count;
+      count->hint = "L: list the missing ones, by place";
+      count->log_label = ""; /* only shows a list */
+    }
+  }
+  menu_add_return(&m_collectibles);
+  menu_init(&m_missing, "missing", missing_lines());
+  m_missing.parent = &m_collectibles;
+}
+
 static void build_inventory(void)
 {
   menu_init(&m_inventory, "inventory", 11);
@@ -1266,6 +1413,7 @@ static void build_inventory(void)
   menu_add_submenu(&m_inventory, "ammo", &m_ammo);
   menu_add_submenu(&m_inventory, "equipment items", &m_equipment);
   menu_add_submenu(&m_inventory, "collection", &m_collection);
+  menu_add_submenu(&m_inventory, "collectibles", &m_collectibles);
   menu_add_submenu(&m_inventory, "quest items", &m_quest);
   menu_add_submenu(&m_inventory, "songs", &m_songs);
   menu_add_submenu(&m_inventory, "dungeon items", &m_dungeon_items);
@@ -1285,6 +1433,7 @@ static void build_inventory(void)
   build_collection();
   build_quest_and_songs();
   build_dungeon_items();
+  build_collectibles();
   menu_t *pictured[] = { &m_child_items, &m_adult_items, &m_universal, &m_ammo, &m_equipment, &m_collection,
                          &m_capacity, &m_magic };
   for (unsigned i = 0; i < ARRAY_LEN(pictured); i++)

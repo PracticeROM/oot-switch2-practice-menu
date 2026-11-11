@@ -56,6 +56,7 @@ static const struct {
 
 
 static uint32_t type_entry_off[GD_NTYPES]; /* offset of each type entry in the manager; 0 = not found */
+static uint32_t bool64_off;                /* the same for the Bool64bitKey flags */
 
 void *gd_manager(void)
 {
@@ -67,6 +68,7 @@ void gd_reset(void)
 {
   for (int i = 0; i < GD_NTYPES; i++)
     type_entry_off[i] = 0;
+  bool64_off = 0;
 }
 
 static bool type_plausible(const gd_type_t *type)
@@ -225,6 +227,89 @@ bool gd_set_enum(uint32_t hash, uint32_t value)
   if (v)
     v[0] = v[1] = value;
   return v != 0;
+}
+
+/* --- Bool64bitKey ------------------------------------------------------------------------------- */
+
+/* Not a hash table like the others: a count and records sorted by key, which the game binary-searches
+ * (its Gold Skulltula count, main+0x57A1E8 in 1.1.1). Layout from that and the loader (main+0x5AE6B0);
+ * FINDINGS "Bool64bitKey". */
+typedef struct {
+  uint64_t key;
+  uint32_t reset;      /* ResetTypeValue */
+  uint8_t  value;      /* 1 = set */
+  uint8_t  save_index; /* SaveFileIndex */
+  uint8_t  _0e;
+  uint8_t  extra;      /* ExtraByte */
+} gd_bool64_t;
+
+typedef struct {
+  uint32_t           count;
+  uint32_t           _04;
+  const gd_bool64_t *records;
+} gd_bool64_type_t;
+
+/* The first Gold Skulltula of the game's own list (main+0x3F0B230): the right entry has its flag. */
+#define GD_BOOL64_PROBE_KEY 0xECDC46B409ED7D38ull
+/* Where the entry is looked for if it isn't at Z64HD_GD_BOOL64_TYPE (1.0.0 is unverified). */
+#define GD_BOOL64_SCAN_FROM 0xC08
+#define GD_BOOL64_SCAN_TO   0xD08
+
+static const gd_bool64_t *bool64_find(const gd_bool64_type_t *type, uint64_t key)
+{
+  uint32_t low = 0, high = type->count;
+  while (low < high) {
+    uint32_t mid = low + (high - low) / 2;
+    uint64_t at = type->records[mid].key;
+    if (at == key)
+      return &type->records[mid];
+    if (at < key)
+      low = mid + 1;
+    else
+      high = mid;
+  }
+  return 0;
+}
+
+static bool bool64_plausible(const gd_bool64_type_t *type)
+{
+  if (!sys_mapped((uintptr_t)type, sizeof(*type), SYS_PERM_R) || type->count == 0 ||
+      type->count >= MAX_FIELD_COUNT || ((uintptr_t)type->records & 7) ||
+      !sys_mapped((uintptr_t)type->records, (size_t)type->count * sizeof(gd_bool64_t), SYS_PERM_R))
+    return false;
+  return type->records[0].key < type->records[type->count - 1].key && bool64_find(type, GD_BOOL64_PROBE_KEY);
+}
+
+/* The Bool64bitKey entry: at its 1.1.1 offset, else the first plausible one in the scan range (cached). */
+static const gd_bool64_type_t *find_bool64_type(void)
+{
+  uint8_t *mgr = gd_manager();
+  if (!mgr)
+    return 0;
+  if (bool64_off && bool64_plausible((const gd_bool64_type_t *)(mgr + bool64_off)))
+    return (const gd_bool64_type_t *)(mgr + bool64_off);
+  bool64_off = 0;
+  if (bool64_plausible((const gd_bool64_type_t *)(mgr + Z64HD_GD_BOOL64_TYPE))) {
+    bool64_off = Z64HD_GD_BOOL64_TYPE;
+    return (const gd_bool64_type_t *)(mgr + bool64_off);
+  }
+  for (uint32_t offset = GD_BOOL64_SCAN_FROM; offset < GD_BOOL64_SCAN_TO; offset += 8) {
+    if (bool64_plausible((const gd_bool64_type_t *)(mgr + offset))) {
+      log_printf("gamedata: Bool64bitKey flags found at manager+0x%x", (unsigned)offset);
+      bool64_off = offset;
+      return (const gd_bool64_type_t *)(mgr + offset);
+    }
+  }
+  return 0;
+}
+
+bool gd_get_bool64(uint64_t key, bool *out)
+{
+  const gd_bool64_type_t *type = find_bool64_type();
+  const gd_bool64_t *record = type ? bool64_find(type, key) : 0;
+  if (record)
+    *out = record->value == 1; /* as the game tests it */
+  return record != 0;
 }
 
 /* --- String64 ---------------------------------------------------------------------------- */

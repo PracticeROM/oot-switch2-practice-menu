@@ -145,6 +145,7 @@ maximum, see **watches > Lock JS Height**.)
 | **ammo** | How much of each kind of ammo you carry, up to your bag's size. **L** fills it. |
 | **equipment items** | **swords** (kokiri, master, and the **big sword** switch: none / giant's knife / broken giant's knife / biggoron's sword), **shields** (kokiri, hylian, mirror), **tunics** (goron, zora), **boots** (iron, hover), **other** (lenses of truth, echo gem, **mask slot**: one mask at a time). |
 | **collection** | Fairy ocarina, ocarina of time, gerudo card, double defense; **strength** (goron's bracelet, **gauntlets**: none / silver / gold); **other** (**scale**, **skulltulas**: the tokens' count, and they show in the collection screen, **ammo capacity**: the size of each bag and the wallet, **magic**: your magic and the meter). |
+| **collectibles** | How many **gold skulltulas**, **heart containers** and **pieces of heart** the save has (e.g. 83/100). **L** on one lists the missing ones under the place they're in: what each is (age, dungeon room, night, bean soil, the boss or the event that gives it ...) and where (as **link > position** shows Link's). Read only. |
 | **quest items** | **spiritual stones** and **medallions**. |
 | **songs** | **normal songs** and **warp songs**. |
 | **dungeon items** | Per dungeon: map, compass, boss key, and **small keys** where it has them. |

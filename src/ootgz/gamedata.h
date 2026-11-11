@@ -38,6 +38,8 @@ bool      gd_get_float(uint32_t hash, float *out);
 bool      gd_set_float(uint32_t hash, float value);
 bool      gd_get_enum(uint32_t hash, uint32_t *out);  /* value = murmur3(choice) */
 bool      gd_set_enum(uint32_t hash, uint32_t value);
+/* Bool64bitKey: flags keyed by a placed actor's 64-bit instance id (a Gold Skulltula's, ...); read only. */
+bool      gd_get_bool64(uint64_t key, bool *out);
 
 /* String64 field hashes. Their array indices can change when a game update adds fields. */
 #define GD_STR_TUNIC    0x008D7F0Cu

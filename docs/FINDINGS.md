@@ -59,6 +59,33 @@ field name (`gamedata.murmur3`). "The patch" is ootmenu's code patch (`patch.py`
   separate fields named `Struct.Member`.
 - **BoolExp** fields are formulas the game evaluates (e.g. "quest at or past stage X"); they can't be written.
 - **Enum** values are hashes of choice names; the choices are in `data/gamedata_fields.json` (`"v"`).
+- A Struct's `DefaultValue` maps each member's hash (`murmur3("Member")`) to the member field's
+  (`murmur3("Struct.Member")`): `DungeonInfo.DodongoCavern.IsGetCompass` is an ordinary Bool in the save.
+
+### Bool64bitKey: flags keyed by a placed actor
+- The `Bool64bitKey` fields (11,657 in `GameDataList.Product.110`) are keyed by a **u64**, not a name hash. 3,686
+  of the keys are the instance `Hash` of an actor placed in the layouts (`romfs/Banc/...bcett`); most of the others
+  are such a `Hash ^ 2`. What the `^ 2` flag means isn't known (both are set for every collected Gold Skulltula).
+  They record what a placed actor did once: each Gold Skulltula, Heart Container and free-standing Piece of Heart
+  (§5.22). Opened chests are not among them: those are the Bool `IsTreasureBoxOpen.<chest Hash in decimal>`.
+- **In memory (1.1.1):** the manager's type entries are `manager+0x8 + type * 0x60` for the 32 basic types (Int
+  `+0xC8`, String64 `+0x608`), then `+0xC08` (Struct, 0x20-byte records), `+0xC30`, and **`+0xC58` Bool64bitKey**:
+  u32 count at `+0xC58`, records at `[+0xC60]`, sorted by key, 16 bytes each: `+0x0` u64 key, `+0x8` u32
+  ResetTypeValue, **`+0xC` u8 value**, `+0xD` u8 SaveFileIndex, `+0xE` unknown, `+0xF` u8 ExtraByte.
+  - The loader `main+0x5AE6B0` (called from `main+0xDFFA84` with `x0 = manager+0xC58`) reads `Hash`,
+    `ResetTypeValue`, `SaveFileIndex` and `ExtraByte` from the field list into them.
+  - The game's Gold Skulltula count (loop at `main+0x57A1E8`) takes `*(*(main+0x4C7E180))`, binary-searches the
+    records (`[mgr+0xC58]`, `[mgr+0xC60]`) for each of 100 keys at `main+0x3F0B230` and counts `value == 1`.
+  - `gamedata.c` `gd_get_bool64` reads them the same way (read only). Writing wasn't studied (`+0x10` / `+0x18` of
+    the entry might be a queue of pending writes; a guess).
+  - **Not verified:** 1.0.0. If the entry at `+0xC58` doesn't hold a known Gold Skulltula key, the module looks for
+    one in `manager+0xC08` to `+0xD08`. Whether 1.0.0's layouts have the same instance ids isn't known either.
+- **In `progress.sav`:** the Bool64bitKey group (type index 32) holds one pair, `(0xA3DB7114, file offset)`. The
+  offset points at a sorted u64 array of the keys that are set, ended by a 0 key (445 keys in one slot). The u32 at
+  header `+8` is where the `(hash, value)` table ends; reading pairs past it gives ~620 "unknown hashes" that are
+  really this data.
+- `IsGoldSkullDead` (0xAD201C8E) is a Struct of 100 Bools that are never saved (reset 0x19, save index -1), so it
+  isn't the collection record.
 
 ### Saved or not, and what resets a field
 - Every field object starts with the same header: `+0x00` its type's vtable, `+0x08` reset bits (u32), `+0x0C` a
@@ -552,6 +579,44 @@ Objects:
   (`stp`/`ldp`, `adrp`/`ldr` of the slot, the `tbnz` bit numbers, the original stores) and every branch resolves to
   its intended address. The module files compile for aarch64.
 - **Not verified:** `1.0.0` has no store offsets, so locks there only show a notice that it will not work.
+
+### 5.22 Collectibles: the missing Gold Skulltulas and hearts
+- **Want:** inventory > collectibles: how many Gold Skulltulas, Heart Containers and Pieces of Heart the save has,
+  and a list of the missing ones by place.
+- **Data:** `tools/collectibles.py` builds `data/collectibles.json` from the layouts alone; `tools/gendata.py` puts
+  it in `data.c`. Each list was checked against the game's own (1.1.1 main):
+  - **Gold Skulltulas:** the 100 placed `Enemy_Skulltula_Gold` actors (114 placements: many are in both age
+    layouts) are exactly the 100 keys at `main+0x3F0B230`. Collected: Bool64bitKey of the Hash set.
+  - **Heart Containers:** the 8 `Obj_Heart_Container` placements, the same way. Main has no list of them.
+  - **Pieces of Heart:** the game's count, `main+0xC7FBF0` (returns 36; called from `main+0x57987C` and
+    `main+0x5799C8`), checks 14 Bool64bitKey keys built in its code (13 `Obj_Heart_Piece` and the
+    `Obj_GerudoValley_Heart_Piece`) and the 22 Bools at `main+0x3F0AE64` (17 events, 5 chests). The 36
+    `HeartPieceAnchor` actors (the map screen's icons) give the same set but for two anchors with another flag:
+    the Dampe race's goal chest (`IsTreasureBoxOpen.5534919361313859554`; the count has
+    `UnderTheGrave_DampeRace_HeartGeted`) and `KakarikoVillage_IsAfterSave_Npc_Hylia_025` (the count has
+    `KakarikoVillage_GatheringTokenGold_GetReward50`). The tool swaps those (`COUNTED_INSTEAD`) and keeps the
+    anchors' positions. An anchor without `MapIconHeartPieceAnchorType` links to its free-standing piece, type 1
+    to its chest, and type 2 names its Bool (`HeartPieceAnchor_GameDataPath`).
+  - **Max life** only grows per whole heart: `PlayerStatus.MaxLife` = 12 + 4 x containers + 4 x (pieces / 4,
+    rounded down), and `PouchData.Obj_Heart_Piece.StockNum` is pieces mod 4.
+- **Checked on saves:** a Python reader of `progress.sav` (outside the repository) on six slots of one player's
+  save: 83/100 Gold Skulltulas (= `PouchData.Item_Token_Gold.StockNum` 83), 6/8 Heart Containers (the two missing
+  are Bongo Bongo's and Twinrova's, whose `DefeatedEnemyNum.Enemy_DungeonBoss_*` are 0), 35/36 Pieces of Heart
+  (StockNum 3), MaxLife 68 = 12 + 4 x 6 + 4 x 8.
+- **Places:** the heading is the map (`map_label`), or the zone where one layout holds several (Hyrule Field's
+  holds Lon Lon Ranch and Lake Hylia). An actor that links to a `LocationArea` is in its zone. The others are
+  counted in Lake Hylia if they are within 199 of the centre of the `LakeHylia` zone horizontally. That zone sits at
+  (-205, -57, 559) with Scale 199 and `RigidBodyShapeType` 3. This is **approximate** (`area_approximate`, 8
+  collectibles): the shape's size and height aren't known. A sphere of radius 199 would leave out the
+  Skulltula in the lake's bean soil (`Gimmick_MagicBeanSoil_LakeHylia`). A cut at z > 380 gives the same 8.
+- **Lines:** a Skulltula's age comes from the layouts it's placed in (`_Child`, `_Adult`, both: "any age"); its
+  `Presence` conditions aren't read. Its `Dynamic` gives the room (`DefaultDungeonRoomIndex`), night
+  (`Enemy_Skulltula_Gold_Nocturnal`, 24), bean soil (`_IsMagicBeanSoil`, 10, all of which also have
+  `_AppearPopOut`) and pops out (`_AppearPopOut`). Event pieces are labelled from their flag's name, so
+  "a villager's reward" (`Npc_Hylia_001_IsGetHeartPiece`, Kakariko) and "frogs, second game"
+  (`MiniGame_FrogTenors_InsectRepellent`) say no more than the names do. The position is the actor's (a piece's
+  anchor), in the same units as Link's (air walls compare them too).
+- **Checked in game** (1.1.1): the page works. **Not verified:** 1.0.0 (see Bool64bitKey).
 
 ## 6. Things that do not work
 

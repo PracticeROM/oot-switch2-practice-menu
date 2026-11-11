@@ -76,4 +76,22 @@ extern const airshape_t  data_airshapes[];
 extern const airwall_t   data_airwalls[];
 extern const airmap_t    data_airmaps[];     extern const int data_n_airmaps;
 
+/* inventory > collectibles (collectibles.json, from tools/collectibles.py), sorted by place. The save records
+ * each with the Bool64bitKey flag `key` (its placed actor's instance id), or if key is 0 with the Bool `flag`.
+ * pos: where it is (a piece of heart: its map-screen icon), in link > position's units. */
+enum { CA_NONE, CA_CHILD, CA_ADULT, CA_ANY };          /* age: of the layouts it's placed in (none: a dungeon) */
+enum { CT_NIGHT = 1, CT_BEAN_SOIL = 2, CT_POPS_OUT = 4 }; /* traits of a gold skulltula */
+typedef struct {
+  uint64_t    key;
+  uint32_t    flag;
+  const char *place;
+  const char *what;   /* a heart container's boss, what gives or holds a piece of heart; NULL: a skulltula */
+  int16_t     pos[3];
+  int8_t      room;   /* in a dungeon, or -1 */
+  uint8_t     age, traits;
+} collectible_t;
+extern const collectible_t data_gold_skulltulas[];  extern const int data_n_gold_skulltulas;
+extern const collectible_t data_heart_containers[]; extern const int data_n_heart_containers;
+extern const collectible_t data_heart_pieces[];     extern const int data_n_heart_pieces;
+
 #endif

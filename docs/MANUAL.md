@@ -109,6 +109,7 @@ and you'll come out at the chosen place. Under **return**: the **current** map a
 | Item | What it does |
 |---|---|
 | **reload map** | Reloads the current map (at the age set in **link**). |
+| **respawn marker** | Being tested (FINDINGS §8): a yellow ring where the save file has Link (`Player_Pos_For_Map`), a post up from it and a line to it from Link, so you can see where a save made now may put him back. The game's style only; off each time the game starts. The **save pos** watch shows the same position as numbers. |
 | *collision* | |
 | **environment** | See below. |
 | *enemies* | |
@@ -116,11 +117,6 @@ and you'll come out at the chosen place. Under **return**: the **current** map a
 | **display through walls** | Also show the bars of enemies hidden behind the scenery (the game's style). Indented under **display enemy health**. |
 
 #### 2.3.1 Environment
-
-**respawn marker** (being tested; FINDINGS §8): a yellow ring where the save file has Link
-(`Player_Pos_For_Map`), a post up from it and a line to it from Link, so you can see where a save made now may
-put him back. The game's style only. It's off each time the game starts. The **save pos** watch shows the same
-position as numbers.
 
 **air walls**: the map's invisible walls, drawn as outlines over the game.
 

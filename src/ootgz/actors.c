@@ -17,6 +17,8 @@
 #include "sys.h"
 #include "z64hd.h"
 
+float sqrtf(float x); /* from sdk */
+
 #define MGR_TREE_ROOT 0x38
 #define NODE_LEFT 0x00
 #define NODE_RIGHT 0x08
@@ -105,7 +107,43 @@ static struct {
   int visits, actors, with_life, enemies;
   uintptr_t link;
   vec3f_t link_pos;
+  /* enemies left out, and why (for the log): the first few of a walk */
+  struct {
+    uintptr_t actor;
+    int why; /* SKIP_* */
+    int life_result, life, max;
+    uint32_t state;
+    float distance;
+  } skipped[8];
+  int n_skipped;
 } walk;
+
+/* why an enemy got no bar */
+enum { SKIP_LIFE, SKIP_STATE, SKIP_MAX, SKIP_FAR, N_SKIPS };
+static const char *const skip_names[N_SKIPS] = { "no life", "not running", "no max life", "too far" };
+static const char *const life_names[N_LIFE_RESULTS] = { "ok", "no components", "no life component",
+                                                        "life unreadable", "no life values" };
+
+static void note_skipped(uintptr_t actor, int why, int life_result, int32_t life, int32_t max, float distance)
+{
+  if (walk.n_skipped >= (int)(sizeof(walk.skipped) / sizeof(walk.skipped[0])))
+    return;
+  walk.skipped[walk.n_skipped].actor = actor;
+  walk.skipped[walk.n_skipped].why = why;
+  walk.skipped[walk.n_skipped].life_result = life_result;
+  walk.skipped[walk.n_skipped].life = life;
+  walk.skipped[walk.n_skipped].max = max;
+  walk.skipped[walk.n_skipped].state = *(uint32_t *)(actor + ACTOR_STATE);
+  walk.skipped[walk.n_skipped].distance = distance;
+  walk.n_skipped++;
+}
+
+static float distance_to_link(uintptr_t actor)
+{
+  const float *pos = (const float *)(actor + ACTOR_POS);
+  float dx = pos[0] - walk.link_pos.x, dy = pos[1] - walk.link_pos.y, dz = pos[2] - walk.link_pos.z;
+  return sqrtf(dx * dx + dy * dy + dz * dz);
+}
 
 static void use_actor(uintptr_t actor)
 {
@@ -116,17 +154,26 @@ static void use_actor(uintptr_t actor)
   int result = actor_life(actor, &life, &max);
   uintptr_t name = *(uintptr_t *)(actor + ACTOR_NAME);
   bool enemy = name && sys_mapped(name, 8, SYS_PERM_R) && starts_with((const char *)name, ENEMY_PREFIX);
-  if (result != LIFE_OK)
+  if (result != LIFE_OK) {
+    if (enemy)
+      note_skipped(actor, SKIP_LIFE, result, 0, 0, distance_to_link(actor));
     return;
+  }
   walk.with_life++;
-  uint32_t state = *(uint32_t *)(actor + ACTOR_STATE);
-  if (!enemy || state < STATE_RUNNING || state > STATE_RUNNING_LAST || max <= 0)
+  if (!enemy)
     return;
+  uint32_t state = *(uint32_t *)(actor + ACTOR_STATE);
+  if (state < STATE_RUNNING || state > STATE_RUNNING_LAST || max <= 0) {
+    note_skipped(actor, max <= 0 ? SKIP_MAX : SKIP_STATE, result, life, max, distance_to_link(actor));
+    return;
+  }
   const float *pos = (const float *)(actor + ACTOR_POS);
   float dx = pos[0] - walk.link_pos.x, dy = pos[1] - walk.link_pos.y, dz = pos[2] - walk.link_pos.z;
   float distance_sq = dx * dx + dy * dy + dz * dz;
-  if (distance_sq > NEAR_LINK * NEAR_LINK)
+  if (distance_sq > NEAR_LINK * NEAR_LINK) {
+    note_skipped(actor, SKIP_FAR, result, life, max, sqrtf(distance_sq));
     return;
+  }
   walk.enemies++;
   int slot = walk.n;
   if (walk.n < walk.max) {
@@ -196,6 +243,14 @@ static void report(const enemy_t *enemies, int n)
                (int)e->life, (int)e->max_life, (double)e->pos[0], (double)e->pos[1], (double)e->pos[2],
                *(uint32_t *)(e->id + ACTOR_STATE));
   }
+  /* the enemies left out, and why: a boss without a bar shows here */
+  for (int i = 0; i < walk.n_skipped; i++) {
+    const char *name = *(const char **)(walk.skipped[i].actor + ACTOR_NAME);
+    log_printf("actors: skipped %s: %s (life %s %d/%d, state %u, %.1f m from Link)",
+               name && sys_mapped((uintptr_t)name, 8, SYS_PERM_R) ? name : "?", skip_names[walk.skipped[i].why],
+               life_names[walk.skipped[i].life_result], (int)walk.skipped[i].life, (int)walk.skipped[i].max,
+               walk.skipped[i].state, (double)walk.skipped[i].distance);
+  }
   int32_t life, max, *cur_ptr, *max_ptr;
   if (walk.link && actor_life(walk.link, &life, &max) == LIFE_OK && link_health(&cur_ptr, &max_ptr))
     log_printf("actors: Link's life %d/%d (link.c: %d/%d)", (int)life, (int)max, (int)*cur_ptr, (int)*max_ptr);
@@ -213,7 +268,7 @@ int enemies_read(enemy_t *out, int max)
   walk.out = out;
   walk.max = max < (int)(sizeof(walk.distance_sq) / sizeof(walk.distance_sq[0])) ? max :
              (int)(sizeof(walk.distance_sq) / sizeof(walk.distance_sq[0]));
-  walk.n = walk.visits = walk.actors = walk.with_life = walk.enemies = 0;
+  walk.n = walk.visits = walk.actors = walk.with_life = walk.enemies = walk.n_skipped = 0;
   walk.link = link_actor();
   if (!link_drawn_pos(&walk.link_pos))
     return 0;

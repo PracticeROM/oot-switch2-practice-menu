@@ -227,6 +227,140 @@ bool gd_set_enum(uint32_t hash, uint32_t value)
   return v != 0;
 }
 
+/* --- Vector3 ----------------------------------------------------------------------------- */
+
+/* Nothing of the Vector3 fields' layout is known from the game's code (no build's vtable for their type, no
+ * object size), so it's worked out from what's there, and nothing is shown until every step agrees:
+ *   the type entry   the one of the manager's whose hash table holds two fields known to be Vector3s;
+ *   the object size  the objects all start with the same vtable (in main): how far apart those are;
+ *   the value        the fields this far keep their value twice, the copy right after it (Int: +0x1C and
+ *                    +0x20). So an object's value is where 12 bytes are followed by the same 12 again, and
+ *                    aren't all zero; where a default comes before them and is the same too, the later
+ *                    place. Taken from the objects that have such a place, when they agree.
+ * Found once and kept; looked for again when the manager's entry stops looking right (another save). What was
+ * found goes to the log, with the first object's words, so it can be checked. Not yet checked in game. */
+#define VEC3_PROBE_A GD_VEC3_PLAYER_POS_FOR_MAP
+#define VEC3_PROBE_B 0x52046B85u /* Sequence_ReservedNextPosition */
+#define VEC3_STRIDE_MIN 0x28
+#define VEC3_STRIDE_MAX 0x80
+#define VEC3_HEADER 0x14 /* the fields' common header: vtable, reset bits, state, save file index */
+#define VEC3_BYTES 12
+#define VEC3_SEARCH_FRAMES 120 /* between tries while it isn't found */
+#define MAIN_SIZE_MAX 0x5000000 /* main's image is smaller than this */
+
+static uint32_t vec3_type_off, vec3_stride, vec3_value_off;
+static uint32_t vec3_wait;
+
+static bool vec3_type_ok(const gd_type_t *type)
+{
+  if (!type_plausible(type))
+    return false;
+  const uint32_t *a = gd_lookup(type, VEC3_PROBE_A), *b = gd_lookup(type, VEC3_PROBE_B);
+  return a && b && a[1] < type->count && b[1] < type->count;
+}
+
+static bool same_bytes(const uint8_t *a, const uint8_t *b, int n)
+{
+  for (int i = 0; i < n; i++)
+    if (a[i] != b[i])
+      return false;
+  return true;
+}
+
+/* where an object keeps its value, by the copy after it; 0 if it has no such place (a value of all zeros) */
+static uint32_t vec3_value_place(const uint8_t *object, uint32_t stride)
+{
+  static const uint8_t zeros[VEC3_BYTES];
+  uint32_t place = 0;
+  for (uint32_t at = VEC3_HEADER; at + 2 * VEC3_BYTES <= stride; at += 4)
+    if (same_bytes(object + at, object + at + VEC3_BYTES, VEC3_BYTES) && !same_bytes(object + at, zeros, VEC3_BYTES))
+      place = at; /* the last one: after a default that's the same */
+  return place;
+}
+
+static bool vec3_find_layout(const gd_type_t *type)
+{
+  const uint8_t *objects = type->objects;
+  if (type->count < 3 || !sys_mapped((uintptr_t)objects, 8, SYS_PERM_R))
+    return false;
+  uintptr_t vtable = *(const uintptr_t *)objects;
+  if (vtable < z64hd_main || vtable >= z64hd_main + MAIN_SIZE_MAX)
+    return false;
+  uint32_t stride = 0;
+  for (uint32_t s = VEC3_STRIDE_MIN; s <= VEC3_STRIDE_MAX && !stride; s += 8)
+    if (sys_mapped((uintptr_t)objects, 2 * (size_t)s + 8, SYS_PERM_R) && *(const uintptr_t *)(objects + s) == vtable &&
+        *(const uintptr_t *)(objects + 2 * s) == vtable)
+      stride = s;
+  if (!stride || !sys_mapped((uintptr_t)objects, (size_t)type->count * stride, SYS_PERM_R))
+    return false;
+  uint32_t place = 0;
+  int agree = 0;
+  for (uint32_t i = 0; i < type->count; i++) {
+    uint32_t here = vec3_value_place(objects + (size_t)i * stride, stride);
+    if (!here)
+      continue;
+    if (place && here != place)
+      return false; /* they don't agree: the layout isn't what's assumed */
+    place = here;
+    agree++;
+  }
+  if (!place) { /* every value is zero for now (the title screen), or they aren't kept as assumed: later */
+    static bool logged;
+    const uint32_t *w = (const uint32_t *)objects;
+    if (!logged)
+      log_printf("gamedata: Vector3 fields: 0x%x bytes each, no value found yet; first: %08x %08x %08x %08x %08x %08x "
+                 "%08x %08x %08x %08x", (unsigned)stride, w[0], w[1], w[2], w[3], w[4], w[5], w[6], w[7], w[8], w[9]);
+    logged = true;
+    return false;
+  }
+  vec3_stride = stride;
+  vec3_value_off = place;
+  const uint32_t *words = (const uint32_t *)objects;
+  log_printf("gamedata: Vector3 fields: %u of 0x%x bytes, value at +0x%x (%d agree); first: %08x %08x %08x %08x %08x "
+             "%08x %08x %08x %08x %08x",
+             (unsigned)type->count, (unsigned)stride, (unsigned)place, agree, words[0], words[1], words[2], words[3],
+             words[4], words[5], words[6], words[7], words[8], words[9]);
+  return true;
+}
+
+const float *gd_vec3(uint32_t hash)
+{
+  uint8_t *mgr = gd_manager();
+  if (!mgr)
+    return 0;
+  gd_type_t *type = vec3_type_off ? (gd_type_t *)(mgr + vec3_type_off) : 0;
+  if (type && !vec3_type_ok(type)) {
+    type = 0;
+    vec3_type_off = vec3_stride = vec3_value_off = 0;
+  }
+  if (!type || !vec3_value_off) {
+    if (vec3_wait) { /* not each frame: a miss walks the manager and every object */
+      vec3_wait--;
+      return 0;
+    }
+    vec3_wait = VEC3_SEARCH_FRAMES;
+    if (!type) {
+      if (!sys_mapped((uintptr_t)mgr, Z64HD_GD_TYPES_SCAN + sizeof(gd_type_t), SYS_PERM_R))
+        return 0;
+      for (uint32_t offset = 0; offset < Z64HD_GD_TYPES_SCAN && !type; offset += 8)
+        if (vec3_type_ok((gd_type_t *)(mgr + offset))) {
+          type = (gd_type_t *)(mgr + offset);
+          vec3_type_off = offset;
+        }
+      if (!type)
+        return 0;
+    }
+    if (!vec3_find_layout(type))
+      return 0;
+    vec3_wait = 0;
+  }
+  const uint32_t *pair = gd_lookup(type, hash);
+  if (!pair || pair[1] >= type->count)
+    return 0;
+  uintptr_t value = (uintptr_t)type->objects + (size_t)pair[1] * vec3_stride + vec3_value_off;
+  return sys_mapped(value, VEC3_BYTES, SYS_PERM_R) ? (const float *)value : 0;
+}
+
 /* --- String64 ---------------------------------------------------------------------------- */
 
 /* Follow the same hash table and value pointer as the game's GetString64. */

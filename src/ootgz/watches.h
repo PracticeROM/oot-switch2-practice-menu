@@ -8,7 +8,7 @@
 typedef enum {
   W_X, W_Y, W_Z, W_FACING, W_MOVE_ANGLE, W_SPEED, W_Y_SPEED, W_CAMERA_ANGLE, W_CAMERA_PITCH,
   W_CAMERA_DIST, W_INPUT, W_STICK, W_LAG, W_TIMER, W_FRAME, W_MAP, W_AIRWALL,
-  W_JS_HEIGHT, W_COUNT /* append only: built-in IDs are saved in settings.ini */
+  W_JS_HEIGHT, W_SAVE_POS, W_COUNT /* append only: built-in IDs are saved in settings.ini */
 } watch_t;
 
 extern const char *const watch_labels[W_COUNT];

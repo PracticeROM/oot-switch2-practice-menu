@@ -189,7 +189,8 @@ row of buttons:
 Under the list:
 
 - **📁 (known watches)**: the built-in watches: x, y, z, facing, move angle, speed, y speed, camera angle /
-  pitch / distance, input, stick, lag, timer, frame, map, air wall, JS Height. Each can be in the list once.
+  pitch / distance, input, stick, lag, timer, frame, map, air wall, JS Height, save pos (the position the save file
+  has for Link, `Player_Pos_For_Map`; not yet checked in game: see FINDINGS §8). Each can be in the list once.
   **JS Height** is the height your last jump set (takeoff + 0.7; FLT_MAX until you jump after a load), which
   the jumpslash launch is limited to. It's always in the list (hide it to keep it off screen).
 - **+ (custom watch)**: a watch of any memory address. Type the address (D-pad left / right: digit, up / down:

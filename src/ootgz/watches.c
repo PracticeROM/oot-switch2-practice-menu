@@ -19,7 +19,7 @@ float hypotf(float x, float y);
 
 const char *const watch_labels[W_COUNT] = {
   "x", "y", "z", "facing", "move angle", "speed", "y speed", "camera angle", "camera pitch",
-  "camera dist", "input", "stick", "lag", "timer", "frame", "map", "air wall", "js height",
+  "camera dist", "input", "stick", "lag", "timer", "frame", "map", "air wall", "js height", "save pos",
 };
 const char *const watches_corner_names[GFX_NPLACES] = { "top-left", "top-right", "bottom-left", "bottom-right",
                                                        "top-centre", "bottom-centre", "custom" };
@@ -636,6 +636,12 @@ void watch_text(watch_t watch, char *buf, int len)
     case W_AIRWALL:
       airwall_link_text(buf, len);
       break;
+    case W_SAVE_POS: { /* where the save file has Link: Player_Pos_For_Map, as the game keeps it now */
+      const float *saved = gd_vec3(GD_VEC3_PLAYER_POS_FOR_MAP);
+      if (saved)
+        snprintf(buf, len, "%.2f %.2f %.2f", (double)saved[0], (double)saved[1], (double)saved[2]);
+      break;
+    }
     case W_JS_HEIGHT: {
       float height;
       if (js_height(&height)) {
@@ -742,7 +748,7 @@ bool watch_entry_has_address(const watch_entry_t *entry)
 {
   switch (entry->id) {
     case W_MEMORY: case W_X: case W_Y: case W_Z: case W_FACING: case W_Y_SPEED: case W_CAMERA_ANGLE:
-    case W_CAMERA_PITCH: case W_CAMERA_DIST: case W_FRAME: case W_MAP: case W_JS_HEIGHT:
+    case W_CAMERA_PITCH: case W_CAMERA_DIST: case W_FRAME: case W_MAP: case W_JS_HEIGHT: case W_SAVE_POS:
       return true;
     default:
       return false;
@@ -786,6 +792,9 @@ bool watch_entry_address(const watch_entry_t *entry, uintptr_t *addr, int *mw_ty
       break;
     case W_JS_HEIGHT:
       found = js_height_addr();
+      break;
+    case W_SAVE_POS: /* x, then y and z */
+      found = (uintptr_t)gd_vec3(GD_VEC3_PLAYER_POS_FOR_MAP);
       break;
     default:
       return false;

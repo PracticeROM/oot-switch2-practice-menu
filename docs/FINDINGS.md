@@ -610,6 +610,27 @@ Each of these was tried and verified not to help:
 
 ## 8. Open problems
 
+### Where a loaded save puts Link (the `save pos` watch; nothing here is checked in game yet)
+
+- **The question:** where does the game put Link when a save is loaded, and can it be shown before saving?
+- **What the save file has:** `Player_Pos_For_Map` (Vector3, `0x960ad56a`) and `Player_Rot_For_Map` (Float,
+  `0xa4aee8cd`) are saved to the slot (save file index 0, reset bits 0x08), with `Sequence_CurrentBanc` (the map).
+  They are the only saved fields that look like Link's position. `Sequence_ReservedNextStartPosName` (the last start
+  point) and `Sequence_ReservedNextPosition` are **not** saved (index -1). So the leads are: the game loads into
+  the saved map at `Player_Pos_For_Map` (perhaps put on the ground under it, or at the start point nearest it), or
+  the field is only for the map screen's marker, as its name says, and a load starts from a fixed start point.
+- **The watch:** `save pos` shows `Player_Pos_For_Map` as the game has it now. To settle the question: watch when
+  it changes (each frame, only on the ground, only on entering a map?), save, reload, and compare where Link
+  appears with what it showed.
+- **Not known from the game's code:** the Vector3 fields' type entry (no vtable for it in `z64hd_builds.h`), their
+  object size, and where the value is in an object. `gd_vec3` (`gamedata.c`) works these out as the game runs (the
+  type entry by two known Vector3 hashes in its hash table; the size by the objects' repeating vtable; the value by
+  the copy every other field type keeps right after its value) and logs what it found ("gamedata: Vector3
+  fields: ..."), with the first object's words. If the watch shows `-`, that log line says how far it got.
+- **Not done:** predicting the place with ray casts of our own. That needs the game's load code (which start point or
+  ground test it uses) and a way to cast against the map's collision, neither of which is known; reading the
+  game's own value comes first.
+
 ### Native collision bypass (0.0.9 test build)
 
 - **Symptom confirmed by the user in 0.0.8:** some walls pass, others block Link or trap him.

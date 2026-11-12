@@ -39,6 +39,11 @@ bool      gd_set_float(uint32_t hash, float value);
 bool      gd_get_enum(uint32_t hash, uint32_t *out);  /* value = murmur3(choice) */
 bool      gd_set_enum(uint32_t hash, uint32_t value);
 
+/* Vector3 (read only; where the game keeps them is worked out as it runs, gamedata.c). The address of
+ * field `hash`'s three floats, or 0: not found, or not worked out yet. */
+#define GD_VEC3_PLAYER_POS_FOR_MAP 0x960AD56Au /* Player_Pos_For_Map: saved with the file */
+const float *gd_vec3(uint32_t hash);
+
 /* String64 field hashes. Their array indices can change when a game update adds fields. */
 #define GD_STR_TUNIC    0x008D7F0Cu
 #define GD_STR_ARROW    0x3615E379u

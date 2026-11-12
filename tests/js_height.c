@@ -24,7 +24,7 @@ static const struct z64hd_build test_build; /* no build: the version-specific pa
 const struct z64hd_build *z64hd_game = &test_build;
 bool enemy_hp_shown;
 bool cheats[CHEAT_COUNT], frame_advance, pause_display, warp_arrival_cutscenes;
-bool levitate_enabled, levitate_through_walls, airwalls_shown, airwalls_all;
+bool levitate_enabled, levitate_through_walls, airwalls_shown, airwalls_push, airwalls_block, airwalls_all;
 int frame_advance_button, levitate_speed = 5, levitate_move_speed = 5;
 
 static uintptr_t actor, first, player, base;
@@ -270,15 +270,15 @@ static void test_hud(const char *image)
   const gfx_screen_t *s = gfx_published();
   assert(s && s->panel[1].rows == 1);
   const gfx_panel_t *p = &s->panel[1];
-  assert(!strncmp(p->ch[0], "js height    Max", 16));
+  assert(!strncmp(p->ch[0], "jump height  Max", 16));
   js_height_lock = true;
   watches_frame(false);
   gfx_frame();
   p = &gfx_published()->panel[1];
-  assert(!strncmp(p->ch[0], "js height \x80  Max", 16));
+  assert(!strncmp(p->ch[0], "jump height\x80 Max", 16));
   char label[24];
   watch_entry_label(&watch_list[0], label, sizeof(label));
-  assert(!strcmp(label, "js height")); /* status must not enter the rename field */
+  assert(!strcmp(label, "jump height")); /* status must not enter the rename field */
   watch_set_label(0, "abcdefghijkl");
   watch_entry_display_label(&watch_list[0], label, sizeof(label));
   assert(!strcmp(label, "abcdefghij \x80"));
@@ -288,7 +288,7 @@ static void test_hud(const char *image)
   js_height_lock = false;
   watches_frame(false);
   gfx_frame();
-  assert(!strncmp(gfx_published()->panel[1].ch[0], "js height    Max", 16));
+  assert(!strncmp(gfx_published()->panel[1].ch[0], "jump height  Max", 16));
   watch_set_hidden(0, true);
   watches_frame(false);
   gfx_frame();

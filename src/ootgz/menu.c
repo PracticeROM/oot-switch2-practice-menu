@@ -455,6 +455,51 @@ void menu_item_line(menu_item_t *item, char *buf, int len)
   snprintf(buf, len, "%c%s %s", item->icon, wide_icon ? "\x03" : "", rest);
 }
 
+/* The item's value as shown now and the widest it can be: a plain number's maximum, an option's longest choice
+ * (gfx_row_value: the value column keeps room for it, so it doesn't move as the value changes). False: neither. */
+static bool item_value(menu_item_t *item, char *shown, char *widest, int len)
+{
+  shown[0] = widest[0] = 0;
+  if (item->kind == MI_NUMBER && !item->text && item->num_max) {
+    int32_t number = item->get_num(item), max = item->num_max(item);
+    if (number == NUM_UNKNOWN || max == NUM_UNKNOWN)
+      return false;
+    snprintf(shown, len, "%d", (int)number);
+    snprintf(widest, len, "%d", (int)max);
+    return true;
+  }
+  if (item->kind != MI_OPTION || item->n_choices <= 0 || (!item->choices && !item->choice_text))
+    return false;
+  char choice[GFX_VALUE_LEN];
+  int now = item->get_option(item), longest = -1;
+  for (int c = 0; c < item->n_choices; c++) {
+    if (item->choices)
+      snprintf(choice, sizeof(choice), "%s", T(item->choices[c]));
+    else
+      item->choice_text(item, c, choice, sizeof(choice));
+    int n = (int)strlen(choice);
+    if (n > longest) {
+      longest = n;
+      snprintf(widest, len, "%s", choice);
+    }
+    if (c == now)
+      snprintf(shown, len, "%s", choice);
+  }
+  if (now < 0 || now >= item->n_choices)
+    snprintf(shown, len, "-");
+  return true;
+}
+
+/* the characters more the item's value can take than it does now (gz's grid) */
+static int item_reserve(menu_item_t *item)
+{
+  char shown[GFX_VALUE_LEN], widest[GFX_VALUE_LEN];
+  if (!item_value(item, shown, widest, sizeof(shown)))
+    return 0;
+  int reserve = (int)strlen(widest) - (int)strlen(shown);
+  return reserve > 0 ? reserve : 0;
+}
+
 static void item_line(menu_item_t *item, char *buf, int len)
 {
   char value[96] = "", pictured[96];
@@ -727,7 +772,8 @@ static int items_width(menu_t *menu)
   int width = 0;
   for (int i = 0; i < menu->n_items; i++) {
     menu_item_line(&menu->items[i], line, sizeof(line));
-    width = max_int(width, ITEM_COL + menu->items[i].indent * MENU_INDENT + label_pad(menu, i) + (int)strlen(line));
+    width = max_int(width, ITEM_COL + menu->items[i].indent * MENU_INDENT + label_pad(menu, i) + (int)strlen(line) +
+                               item_reserve(&menu->items[i]));
   }
   return width;
 }
@@ -793,8 +839,9 @@ static void update_scroll(menu_t *menu, int pinned, int visible)
   while (top > pinned && !selectable(&menu->items[top - 1]) && menu->selected - (top - 1) < visible)
     top--;
   /* and the same below it: the read-only lines under a menu's return */
+  int n_list = menu->n_items - menu->footer;
   int bottom = menu->selected;
-  while (bottom + 1 < menu->n_items && !selectable(&menu->items[bottom + 1]) && bottom + 1 - top < visible)
+  while (bottom + 1 < n_list && !selectable(&menu->items[bottom + 1]) && bottom + 1 - top < visible)
     bottom++;
   if (menu->scroll_text) /* scrolled by the d-pad: only kept in range */
     menu->scroll = menu->scroll < 0 ? 0 : menu->scroll;
@@ -802,8 +849,8 @@ static void update_scroll(menu_t *menu, int pinned, int visible)
     menu->scroll = top;
   else if (bottom >= menu->scroll + visible)
     menu->scroll = bottom - visible + 1;
-  if (menu->scroll > menu->n_items - visible)
-    menu->scroll = menu->n_items - visible > 0 ? menu->n_items - visible : 0;
+  if (menu->scroll > n_list - visible)
+    menu->scroll = n_list - visible > 0 ? n_list - visible : 0;
   if (menu->scroll < pinned)
     menu->scroll = pinned;
 }
@@ -862,7 +909,7 @@ static int row_kind(const menu_item_t *item)
   int grid = item->grid ? GFX_ROW_GRID : 0;
   if (item->kind == MI_TEXT)
     return (item->text == heading_text ? GFX_ROW_HEADING : GFX_ROW_LINE) | grid;
-  int indent = item->indent ? GFX_ROW_INDENT : 0;
+  int indent = item->indent ? GFX_ROW_INDENT | (item->indent > 1 ? GFX_ROW_INDENT2 : 0) : 0;
   return (item->kind == MI_SUBMENU ? GFX_ROW_ITEM | GFX_ROW_OPENS : GFX_ROW_ITEM) | grid | indent;
 }
 
@@ -908,12 +955,15 @@ void menu_draw(void)
   /* item rows that fit on screen: the title and a blank line above them; a blank and the hint below
    * (always room for the hint, so the list doesn't jump) */
   int first_item_y = title_rows + 1;
-  int visible = gfx_menu_rows - first_item_y - 1 - hint_rows;
+  /* the lines under the list (menu->footer), a blank above them, take their rows from it */
+  int footer = menu->footer > 0 && menu->footer < menu->n_items ? menu->footer : 0;
+  int n_list = menu->n_items - footer;
+  int visible = gfx_menu_rows - first_item_y - 1 - hint_rows - (footer ? footer + 1 : 0);
   if (visible < MIN_SCROLL_ROWS)
     visible = MIN_SCROLL_ROWS;
   /* the first `pinned` items stay at the top; the rest scroll under them in `visible` rows */
   int pinned = 0;
-  if (menu->pinned > 0 && menu->pinned < menu->n_items && visible - menu->pinned >= MIN_SCROLL_ROWS)
+  if (menu->pinned > 0 && menu->pinned < n_list && visible - menu->pinned >= MIN_SCROLL_ROWS)
     pinned = menu->pinned;
   visible -= pinned;
   update_scroll(menu, pinned, visible);
@@ -926,29 +976,58 @@ void menu_draw(void)
   gfx_row(first_item_y - 1, GFX_ROW_GAP);
   for (int row = 0; row < pinned + visible; row++) {
     int index = row < pinned ? row : menu->scroll + row - pinned;
-    if (index >= menu->n_items)
+    if (index >= n_list)
       break;
     /* a heading never ends the list: with nothing of its group under it, its row stays empty */
-    if (row == pinned + visible - 1 && index + 1 < menu->n_items && menu->items[index].text == heading_text) {
+    if (row == pinned + visible - 1 && index + 1 < n_list && menu->items[index].text == heading_text) {
       gfx_row(first_item_y + row, GFX_ROW_LINE);
       break;
     }
     draw_item(menu, index, first_item_y + row);
     gfx_row(first_item_y + row, row_kind(&menu->items[index]));
+    char shown[GFX_VALUE_LEN], widest[GFX_VALUE_LEN];
+    if (item_value(&menu->items[index], shown, widest, sizeof(shown)))
+      gfx_row_value(first_item_y + row, shown, widest);
   }
   if (menu->scroll > pinned)
     gfx_text(0, first_item_y + pinned, GFX_DIM, "^");
-  if (menu->scroll + visible < menu->n_items)
+  if (menu->scroll + visible < n_list)
     gfx_text(0, first_item_y + pinned + visible - 1, GFX_DIM, "v");
-  if (menu->n_items - pinned > visible) /* the game's style draws a scroll bar */
-    gfx_scroll(first_item_y + pinned, visible, menu->n_items - pinned, menu->scroll - pinned);
+  /* the game's style draws a scroll bar, in every menu alike: over the rows that scroll, or (a list that fits) over
+   * its rows, the thumb then filling it */
+  int scrolling = n_list - pinned;
+  gfx_scroll(first_item_y + pinned, scrolling < visible ? scrolling : visible, scrolling, menu->scroll - pinned);
+  if (menu->inner_rows > 0) { /* the list inside: its bar over the part of its rows on screen */
+    int from = -1, to = -1;
+    for (int row = 0; row < pinned + visible; row++) {
+      int index = row < pinned ? row : menu->scroll + row - pinned;
+      if (index >= n_list)
+        break;
+      if (index >= menu->inner_first && index < menu->inner_first + menu->inner_rows) {
+        from = from < 0 ? row : from;
+        to = row;
+      }
+    }
+    if (from >= 0)
+      gfx_inner_scroll(first_item_y + from, to - from + 1, menu->inner_items, menu->inner_top);
+  }
 
   /* The panel keeps one size while in this menu (a size change redraws it, which flashes): the hint
    * rows are always there, and the width is the widest line or hint of any item, not just the
    * visible ones. */
   static const char filler[2] = { FILLER_CHAR, 0 };
-  int scrolled_shown = menu->n_items - menu->scroll < visible ? menu->n_items - menu->scroll : visible;
-  int hint_y = first_item_y + pinned + scrolled_shown + 1;
+  int scrolled_shown = n_list - menu->scroll < visible ? n_list - menu->scroll : visible;
+  int list_end = first_item_y + pinned + scrolled_shown;
+  if (footer) { /* a blank, then the lines under the list */
+    gfx_row(list_end, GFX_ROW_GAP);
+    for (int k = 0; k < footer; k++) {
+      int index = n_list + k, y = list_end + 1 + k;
+      draw_item(menu, index, y);
+      gfx_row(y, row_kind(&menu->items[index]));
+    }
+    list_end += footer + 1;
+  }
+  int hint_y = list_end + 1;
   int n_hint_lines = wrap_text(hint, wrap_w, hint_lines, HINT_MAX_ROWS, 0);
   /* the game's style wraps the hint itself, and leaves the hint's place out of a menu that has none */
   bool hints = hint_w > 0;

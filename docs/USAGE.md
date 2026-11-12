@@ -103,7 +103,7 @@ to add it. Or open **debug > memory**, find the value, edit the row (**L**) and 
 **watches > watches box > move watches position**, then the D-pad (hold it to go faster). **L** when it's in place.
 
 **...see the invisible walls?**
-**scene > collision > show**. Cyan walls stop Link; red ones are walls he's inside.
+**scene > environment > show**. Cyan walls stop Link; red ones are walls he's inside.
 
 **...float around?**
 Turn on **settings > levitate > enabled**, close the menu, press **L3**. Push the left stick to move; hold **X** to rise or **B** to descend. Release both to hover.
@@ -154,6 +154,6 @@ the SD card in `sloperinaGZ/settings.ini`, plain text you can edit. Your game sa
 - **"settings won't be kept".** The game couldn't open the SD card; everything works, it just won't remember your
   settings.
 
-Still stuck? The **log** menu (on the main menu) lists what sloperinaGZ did and what went wrong (set **type** to
+Still stuck? The **log** menu (on the main menu) lists what sloperinaGZ did and what went wrong (set **filter** to
 **problems**), and everything is also saved to `sloperinaGZ/log.txt` on the SD card: send that file with any
 problem report. The [manual](MANUAL.md) explains every option.

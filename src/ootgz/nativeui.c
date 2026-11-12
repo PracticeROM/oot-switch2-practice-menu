@@ -173,6 +173,21 @@ static void put_glyph(gf_face_t face, int em, uint32_t cp, const gf_glyph_t *g, 
     draw_glyph(g, x64, baseline, colour);
 }
 
+/* a text's width in one face, kerned, as draw_run draws it */
+static float plain_width(gf_face_t face, int em, const char *s)
+{
+  int x64 = 0;
+  for (; *s; s++) {
+    const gf_glyph_t *g = gamefont_glyph(face, em, (unsigned char)*s);
+    if (!g)
+      g = gamefont_glyph(GF_REGULAR, em, '?');
+    x64 += g ? g->advance : 0;
+    if (s[1])
+      x64 += gamefont_kern(face, em, (unsigned char)s[0], (unsigned char)s[1]);
+  }
+  return x64 / 64.0f;
+}
+
 /* the run's characters as drawn: one face, kerning between neighbours */
 static void draw_run(const char *s, int n, gf_face_t face, int em, int x64, int baseline, rgb_t colour)
 {
@@ -567,11 +582,11 @@ static float fp_px; /* screen pixels per font pixel (scale / 16) */
 #define SCROLL_W 4.5f   /* the scroll bar's width (it's in the list's first column, as the game has it left) */
 #define THUMB_W 0.55f   /* its thumb's, of that: inside the track with room round it, as the game's */
 
-/* the menu's list scrolls, and the game's scroll bar can be drawn */
+/* the menu has a list (scrolling or not: every menu shows the bar, a full thumb when it all fits), and the game's
+ * scroll bar can be drawn */
 static bool scroll_bar_shown(const gfx_panel_t *panel)
 {
-  return panel->scroll_rows && panel->scroll_items > panel->scroll_rows && gpuui_image_ready(GAMEIMAGE_SCROLL_BASE) &&
-         gpuui_image_ready(GAMEIMAGE_SCROLL_BAR);
+  return panel->scroll_rows && gpuui_image_ready(GAMEIMAGE_SCROLL_BASE) && gpuui_image_ready(GAMEIMAGE_SCROLL_BAR);
 }
 
 static bool laid_out(const gfx_panel_t *panel)
@@ -1418,8 +1433,10 @@ static bool row_setup(mrow_t *r)
   r->indent_from = r->cols;
   r->indent_shift = 0;
   if ((panel->kind[r->row] & GFX_ROW_INDENT) && !r->grid) {
+    int levels = panel->kind[r->row] & GFX_ROW_INDENT2 ? 2 : 1; /* GFX_ROW_INDENT2: under an item, a level more */
+    int from = LIST_COL + (ITEM_INDENT_COL - LIST_COL) * levels;
     r->indent_from = ITEM_INDENT_COL;
-    r->indent_shift = r->em * INDENT_EM - (float)(cell_x(ITEM_INDENT_COL, r->scale) - cell_x(LIST_COL, r->scale));
+    r->indent_shift = r->em * INDENT_EM * levels - (float)(cell_x(from, r->scale) - cell_x(LIST_COL, r->scale));
   }
 
   int first_text = -1, last_text = -1, first_sel = -1, last_sel = -1;
@@ -1791,6 +1808,11 @@ static void menu_layout(const gfx_panel_t *panel, int cols, int scale, float *va
       float label = menu_cells(&r, 0, false);
       r.cols = cols;
       float value = menu_cells(&r, from, false) - col_x(&r, from);
+      if (panel->value_widest[row][0]) { /* room for its widest value (a number's maximum, an option's longest) */
+        gf_face_t face = face_at(&r, from, GFX_SELECTED);
+        float more = plain_width(face, r.em, panel->value_widest[row]) - plain_width(face, r.em, panel->value_shown[row]);
+        value += more > 0 ? more : 0;
+      }
       labels = label > labels ? label : labels;
       values = value > values ? value : values;
       gap = r.em * 1.5f;
@@ -2396,6 +2418,23 @@ static void draw_pad(const gfx_panel_t *panel, float x, float y, float w, int co
   draw_row(panel, row, cols, scale, legacy);
 }
 
+/* The game's scroll bar at bx over rows [row, row + rows) (row_top: each row's top, from y): its track (a shade
+ * lighter than the box) over the rows, its thumb for the `rows` of `items` shown from `top` in the menu's gold,
+ * the picture's grain kept as darker and lighter gold */
+static void scroll_bar(float bx, float y, const float *row_top, int row, int rows, int items, int top)
+{
+  float bw = SCROLL_W * fp_px;
+  float by = y + row_top[row], bh = row_top[row + rows] - row_top[row];
+  picture_bar(GAMEIMAGE_SCROLL_BASE, bx, by, bw, bh, 26, true, to_gpu(styles[GFX_FAINT].colour, 0.7f * gpu_fade), 0);
+  float tw = bw * THUMB_W, inset = (bw - tw) / 2; /* the thumb runs inside the track, `inset` from its edges */
+  float run = bh - 2 * inset, share = items > rows ? (float)rows / items : 1;
+  float th = run * share > 3 * tw ? run * share : 3 * tw;
+  int last = items - rows;
+  float ty = by + inset + (run - th) * (last > 0 ? (float)top / last : 0);
+  static const gpu_colour_t gold[2] = { { 0.62f, 0.48f, 0.22f, 0 }, { 1.0f, 0.93f, 0.70f, 1 } };
+  picture_bar(GAMEIMAGE_SCROLL_BAR, bx + inset, ty, tw, th, 12, true, (gpu_colour_t){ 1, 1, 1, gpu_fade }, gold);
+}
+
 /* a listed panel's rows (the menu laid out, the watches) in the grid's place (x, y, w, h), at alpha */
 static void draw_list(const gfx_panel_t *panel, float x, float y, float w, float h, int cols, int rows, int scale,
                       nui_legacy_fn legacy, float value_right, float alpha)
@@ -2453,21 +2492,14 @@ static void draw_list(const gfx_panel_t *panel, float x, float y, float w, float
   gpu_fade = alpha;
   if (menu && !cursor_still)
     cursor_leaving();
-  if (menu && scroll_bar_shown(panel) && panel->scroll_row + panel->scroll_rows <= rows) {
-    /* the game's scroll bar left of the list (in gz's column of its ^ / v): its track (a shade lighter than
-     * the box) over the rows that scroll, its thumb for the part shown in the menu's gold, the picture's
-     * grain kept as darker and lighter gold */
-    float bx = x + cell_x(SCROLL_MARK_COL, scale) + (CELL_W - SCROLL_W) / 2 * fp_px, bw = SCROLL_W * fp_px;
-    float by = y + row_top[panel->scroll_row], bh = row_top[panel->scroll_row + panel->scroll_rows] - row_top[panel->scroll_row];
-    picture_bar(GAMEIMAGE_SCROLL_BASE, bx, by, bw, bh, 26, true, to_gpu(styles[GFX_FAINT].colour, 0.7f * gpu_fade), 0);
-    float tw = bw * THUMB_W, inset = (bw - tw) / 2; /* the thumb runs inside the track, `inset` from its edges */
-    float run = bh - 2 * inset, share = (float)panel->scroll_rows / panel->scroll_items;
-    float th = run * share > 3 * tw ? run * share : 3 * tw;
-    int last = panel->scroll_items - panel->scroll_rows;
-    float ty = by + inset + (run - th) * (last > 0 ? (float)panel->scroll_top / last : 0);
-    static const gpu_colour_t gold[2] = { { 0.62f, 0.48f, 0.22f, 0 }, { 1.0f, 0.93f, 0.70f, 1 } };
-    picture_bar(GAMEIMAGE_SCROLL_BAR, bx + inset, ty, tw, th, 12, true, (gpu_colour_t){ 1, 1, 1, gpu_fade }, gold);
-  }
+  if (menu && scroll_bar_shown(panel) && panel->scroll_row + panel->scroll_rows <= rows)
+    /* the game's scroll bar left of the list (in gz's column of its ^ / v) */
+    scroll_bar(x + cell_x(SCROLL_MARK_COL, scale) + (CELL_W - SCROLL_W) / 2 * fp_px, y, row_top,
+               panel->scroll_row, panel->scroll_rows, panel->scroll_items, panel->scroll_top);
+  if (menu && panel->inner_rows && panel->inner_row + panel->inner_rows <= rows && scroll_bar_shown(panel))
+    /* a list inside it (the watches): its own bar in the room its rows are indented by, under the heading */
+    scroll_bar(x + (cell_x(LIST_COL, scale) + cell_x(ITEM_INDENT_COL, scale)) / 2.0f - SCROLL_W * fp_px / 2, y,
+               row_top, panel->inner_row, panel->inner_rows, panel->inner_items, panel->inner_top);
   top += row_fp[GFX_ROW_GAP].height * fp_px;
   r.h = GUIDE_FP * fp_px;
   if (shows_controls(panel) && top + r.h <= h) {

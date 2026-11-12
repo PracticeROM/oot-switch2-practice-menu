@@ -15,6 +15,7 @@
 
 #define GFX_COLS 64
 #define GFX_ROWS 26
+#define GFX_VALUE_LEN 24 /* gfx_row_value's texts, with their 0 */
 #define GFX_PANELS 4
 #define GFX_PANEL_HUD 1   /* the watches */
 #define GFX_PANEL_LOG 2
@@ -44,8 +45,11 @@
 /* the game's picture of an item (the game's style only, nativeui.c): two cells, GFX_PICTURE then its
  * number (gameimage.h's GAMEPIC_*) as GFX_PICTURE_ID(n) */
 #define GFX_PICTURE '\x0E'
-#define GFX_PICTURE_ID(n) ((char)(0xA0 + (n)))
-#define GFX_PICTURE_OF(c) ((int)(unsigned char)(c) - 0xA0)
+/* only ever read as the character after GFX_PICTURE, so its range can overlap others (0x80 is GFX_ICON_LOCK) */
+#define GFX_PICTURE_BASE 0x81
+#define GFX_PICTURE_MAX (0x100 - GFX_PICTURE_BASE) /* pictures numbered under this */
+#define GFX_PICTURE_ID(n) ((char)(GFX_PICTURE_BASE + (n)))
+#define GFX_PICTURE_OF(c) ((int)(unsigned char)(c) - GFX_PICTURE_BASE)
 
 typedef enum {
   GFX_NORMAL,
@@ -77,6 +81,7 @@ typedef enum {
 #define GFX_ROW_OPENS 0x10 /* an item that opens a menu: its line ends " >" */
 #define GFX_ROW_GRID 0x20  /* a line kept on the grid, a character a cell (menu_item_t.grid) */
 #define GFX_ROW_INDENT 0x40 /* an item under a heading, menu.c's MENU_INDENT cells in (the game's style indents it less) */
+#define GFX_ROW_INDENT2 0x80 /* with GFX_ROW_INDENT: an item under another one, a second MENU_INDENT in */
 #define GFX_WATCH_LABEL_W 12
 
 /* the input display's controller drawing (gfx_input_pad): where its sticks and d-pad are, in font pixels
@@ -114,8 +119,13 @@ typedef struct {
   uint8_t  scale_pct;                 /* drawn at this % of the menu's size (0: the same) */
   uint8_t  kind[GFX_ROWS];            /* the menu: what each row is (gfx_row_kind_t, GFX_ROW_OPENS) */
   char     hint[GFX_HINT_LEN];        /* the menu: its hint as one text, which the game's style wraps itself */
-  uint8_t  scroll_row, scroll_rows;   /* the menu: the rows its list scrolls in (0 rows: it doesn't) ... */
+  uint8_t  scroll_row, scroll_rows;   /* the menu: the rows its list is in (0 rows: no list) ... */
   uint16_t scroll_items, scroll_top;  /* ... how many items scroll there, and the first one shown */
+  uint8_t  inner_row, inner_rows;     /* a list inside the menu's (the watches) with its own bar: its rows ... */
+  uint16_t inner_items, inner_top;    /* ... and what scrolls in them, as scroll_* */
+  /* the menu: a row's value as it is now and the widest it can be (a number's maximum, an option's longest
+   * choice), so the value column keeps room for that and doesn't move as the value changes ("": none) */
+  char     value_shown[GFX_ROWS][GFX_VALUE_LEN], value_widest[GFX_ROWS][GFX_VALUE_LEN];
 } gfx_panel_t;
 
 typedef struct { gfx_panel_t panel[GFX_PANELS]; } gfx_screen_t;
@@ -124,9 +134,12 @@ typedef struct { gfx_panel_t panel[GFX_PANELS]; } gfx_screen_t;
 void gfx_begin(void);
 void gfx_text(int col, int row, gfx_style_t style, const char *s);
 void gfx_row(int row, int kind); /* what the row is (gfx_row_kind_t, | GFX_ROW_OPENS) */
+void gfx_row_value(int row, const char *shown, const char *widest); /* gfx_panel_t.value_shown, value_widest */
 void gfx_hint(const char *s);    /* the hint shown in the hint's rows, unwrapped */
-/* the list scrolls: `items` items in the rows from `row` on, `rows` of them shown from item `top` */
+/* the list: `items` items in the rows from `row` on, `rows` of them shown from item `top` (all of them: it fits) */
 void gfx_scroll(int row, int rows, int items, int top);
+/* a list inside it (the watches): the same, its bar beside its rows, a level in */
+void gfx_inner_scroll(int row, int rows, int items, int top);
 void gfx_end(void);
 void gfx_clear(void);            /* menu closed */
 /* gz_log: a line in the log at the bottom right, shown a second and then faded out */

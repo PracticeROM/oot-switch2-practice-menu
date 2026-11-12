@@ -1268,6 +1268,7 @@ static const float airwall_colours[AW_NCOLORS][4] = {
   [AW_BLOCKS] = { 0.23f, 0.84f, 1.0f, 1.0f }, /* cyan: stops Link */
   [AW_INSIDE] = { 1.0f, 0.28f, 0.28f, 1.0f }, /* red: Link is inside it */
   [AW_OTHER] = { 0.60f, 0.55f, 1.0f, 1.0f },  /* violet: other kinds */
+  [AW_PUSHES] = { 1.0f, 0.76f, 0.18f, 1.0f }, /* amber: pushes Link off */
 };
 
 /* enemy health (enemyhp.c) */

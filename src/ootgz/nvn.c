@@ -1269,6 +1269,9 @@ static const float airwall_colours[AW_NCOLORS][4] = {
   [AW_INSIDE] = { 1.0f, 0.28f, 0.28f, 1.0f }, /* red: Link is inside it */
   [AW_OTHER] = { 0.60f, 0.55f, 1.0f, 1.0f },  /* violet: other kinds */
   [AW_PUSHES] = { 1.0f, 0.76f, 0.18f, 1.0f }, /* amber: pushes Link off */
+  [AW_SLOT_A] = { 1.0f, 0.40f, 0.85f, 1.0f }, /* pink: save slot A (savepos.c) */
+  [AW_SLOT_B] = { 0.35f, 1.0f, 0.45f, 1.0f }, /* green: save slot B */
+  [AW_LOAD] = { 1.0f, 0.95f, 0.30f, 1.0f },   /* yellow: where a load puts Link */
 };
 
 /* enemy health (enemyhp.c) */

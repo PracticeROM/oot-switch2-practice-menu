@@ -123,6 +123,9 @@ static const struct z64hd_build z64hd_builds[] = {
     .cct_force_no_hit = 0x158D40,
     .cct_set_position = 0x6B2530,
     .cct_set_velocity = 0x12DBE0,
+    .scene_mgr_ptr = 0x4E97648,
+    .autosave_update = 0x32762B0,
+    .safety_search = 0x945310,
     .link_paths = {
       { 0x4E371D0, 0x480 }, { 0x4E94858, 0x2E0 }, { 0x4E935B8, 0xEF8 },
       { 0x4E94860, 0x328 }, { 0x4E94368, 0xD70 },

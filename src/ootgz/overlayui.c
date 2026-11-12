@@ -52,6 +52,9 @@ static const gpu_colour_t line_colours[AW_NCOLORS] = {
   [AW_INSIDE] = { 1.0f, 0.32f, 0.30f, 1 }, /* red: Link is inside it */
   [AW_OTHER] = { 0.66f, 0.58f, 1.0f, 1 },  /* violet: other kinds */
   [AW_PUSHES] = { 1.0f, 0.78f, 0.22f, 1 }, /* amber: pushes Link off */
+  [AW_SLOT_A] = { 1.0f, 0.42f, 0.86f, 1 }, /* pink: save slot A (savepos.c) */
+  [AW_SLOT_B] = { 0.38f, 1.0f, 0.48f, 1 }, /* green: save slot B */
+  [AW_LOAD] = { 1.0f, 0.95f, 0.32f, 1 },   /* yellow: where a load puts Link */
 };
 
 /* budget: the quads the lines may take. Short of them, the glows go first, then the farthest lines. */

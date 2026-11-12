@@ -25,6 +25,7 @@
 #include "watches.h"
 #include "levitate.h"
 #include "airwall.h"
+#include "savepos.h"
 
 #include "sdfs.h"
 #include "lang.h"
@@ -98,6 +99,8 @@ typedef struct {
   int32_t airwalls_block;
   int32_t airwalls_all;
   int32_t airwalls_xray;
+  int32_t savepos_shown;
+  int32_t savepos_load;
   int32_t enemy_hp;
   int32_t enemy_hp_xray;
   int32_t menu_style;
@@ -165,6 +168,8 @@ static snapshot_t take_snapshot(void)
   s.airwalls_block = airwalls_block;
   s.airwalls_all = airwalls_all;
   s.airwalls_xray = airwalls_xray;
+  s.savepos_shown = savepos_shown;
+  s.savepos_load = savepos_load;
   s.enemy_hp = enemy_hp_shown;
   s.enemy_hp_xray = enemy_hp_xray;
   s.menu_style = gfx_style;
@@ -245,6 +250,8 @@ static void apply_snapshot(const snapshot_t *s)
   airwalls_block = s->airwalls_block != 0;
   airwalls_all = s->airwalls_all != 0;
   airwalls_xray = s->airwalls_xray != 0;
+  savepos_shown = s->savepos_shown != 0;
+  savepos_load = s->savepos_load != 0;
   enemy_hp_shown = s->enemy_hp != 0;
   enemy_hp_xray = s->enemy_hp_xray != 0;
 }
@@ -326,6 +333,8 @@ static const struct { const char *key; size_t field_offset; } int_keys[] = {
   INT_KEY("airwalls_block", airwalls_block),
   INT_KEY("airwalls_all", airwalls_all),
   INT_KEY("airwalls_xray", airwalls_xray),
+  INT_KEY("savepos_shown", savepos_shown),
+  INT_KEY("savepos_load", savepos_load),
   INT_KEY("enemy_health", enemy_hp),
   INT_KEY("enemy_health_xray", enemy_hp_xray),
   INT_KEY("menu_style", menu_style),
@@ -513,13 +522,14 @@ static void save_settings_file(const snapshot_t *s)
                    "settings_version=%d\ncheats=%u\nwatch_list=%s\nwatches_shown=%d\nwatches_header=%d\nwatch_position=%d\nwatch_x=%d\nwatch_y=%d\nopacity=%d\n"
                    "arrival_cutscenes=%d\nlevitate=%d\nlevitate_speed=%d\nlevitate_move_speed=%d\n"
                    "levitate_through_walls=%d\nairwalls_shown=%d\nairwalls_push=%d\nairwalls_block=%d\nairwalls_all=%d\n"
-                   "enemy_health=%d\n",
+                   "savepos_shown=%d\nsavepos_load=%d\nenemy_health=%d\n",
                    (int)s->settings_version, (unsigned)s->cheats, list, (int)s->watches_shown, (int)s->watches_header,
                    (int)s->watch_position,
                    (int)s->watch_x, (int)s->watch_y,
                    (int)s->opacity, (int)s->arrival_cutscenes, (int)s->levitate, (int)s->levitate_speed,
                    (int)s->levitate_move, (int)s->levitate_walls, (int)s->airwalls_shown, (int)s->airwalls_push,
                    (int)s->airwalls_block, (int)s->airwalls_all,
+                   (int)s->savepos_shown, (int)s->savepos_load,
                    (int)s->enemy_hp);
   if (n < (int)sizeof(buf))
     n += snprintf(buf + n, sizeof(buf) - n,

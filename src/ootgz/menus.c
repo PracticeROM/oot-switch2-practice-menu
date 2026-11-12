@@ -17,6 +17,7 @@
 #include "levitate.h"
 #include "lock.h"
 #include "position.h"
+#include "savepos.h"
 #include "link.h"
 #include "menu.h"
 #include "input.h"
@@ -2194,14 +2195,71 @@ static void text_air_wall_link(menu_item_t *it, char *buf, int len)
   snprintf(buf, len, TF("link   %s"), text);
 }
 
+static bool get_savepos_shown(menu_item_t *it)
+{
+  return savepos_shown;
+}
+
+static void set_savepos_shown(menu_item_t *it, bool on)
+{
+  savepos_shown = on;
+}
+
+static void text_savepos_slot(menu_item_t *it, char *buf, int len)
+{
+  savepos_text((int)it->data, buf, len);
+}
+
+static bool get_savepos_load(menu_item_t *it)
+{
+  return savepos_load;
+}
+
+static void set_savepos_load(menu_item_t *it, bool on)
+{
+  savepos_load = on;
+}
+
+static void text_savepos_load(menu_item_t *it, char *buf, int len)
+{
+  savepos_load_text(buf, len);
+}
+
+static menu_t m_savepos;
+
+static void build_savepos(void)
+{
+  menu_init(&m_savepos, "save position", 7);
+  menu_item_t *show = menu_add_check(&m_savepos, "show slots", get_savepos_shown, set_savepos_shown, 0);
+  if (show) {
+    show->hint = "pink: slot a  green: slot b  cross: the one a save keeps";
+    show->log_label = "save slots:";
+  }
+  menu_item_t *load = menu_add_check(&m_savepos, "where a load puts link", get_savepos_load, set_savepos_load, 0);
+  if (load) {
+    load->hint = "yellow: the game's search round the kept slot, run now";
+    load->log_label = "load position:";
+    load->indent = 2; /* under show slots */
+  }
+  menu_add_return(&m_savepos);
+  /* the slots now: under the list, not part of it */
+  menu_add_text(&m_savepos, text_savepos_slot, SAVEPOS_A);
+  menu_add_text(&m_savepos, text_savepos_slot, SAVEPOS_B);
+  menu_add_text(&m_savepos, text_savepos_load, 0);
+  m_savepos.footer = 3;
+}
+
 static void build_scene(void)
 {
-  menu_init(&m_scene, "scene", 7);
+  build_savepos();
+  menu_init(&m_scene, "scene", 9);
   menu_item_t *reload = menu_add_action(&m_scene, "reload map", act_reload_map, 0);
   if (reload)
     reload->hint = "L: reload this map (at the age set in the link menu)";
   menu_add_heading(&m_scene, "collision");
   menu_add_submenu(&m_scene, "environment", &m_collision);
+  menu_add_heading(&m_scene, "save and load");
+  menu_add_submenu(&m_scene, "save position", &m_savepos);
   menu_add_heading(&m_scene, "enemies");
   menu_item_t *enemy_hp = menu_add_check(&m_scene, "display enemy health", get_enemy_hp, set_enemy_hp, 0);
   if (enemy_hp) {

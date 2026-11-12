@@ -941,3 +941,96 @@ Entries 1 to 4 and 14 were empty; 35 and 40 had no name getter.
   early on (after 5.6 and 8 of the 144.5 MiB it decodes) on the decoder's 17 KB and 41 KB blocks while the game
   loaded; on the Mac, 4.6 MB for the cached pictures wasn't there while gz's style still held its 23 MB of
   panels and see-through buffers.
+
+### 9.7 Where a load puts Link: the restart point, SavePos and the safe-place search (v131072; checked in game)
+After a save and load Link sometimes appears somewhere other than where he saved, sometimes past a wall. Two
+things cause it: the save records a *restart point*, not Link's position, and the load runs a search around that
+point.
+- **The restart point** (P = Link's player component `[[actor+0x270]+0x358]`) is updated every frame by
+  `main+0x60A41C`. It's skipped (the point stays where it was) when any of these hold:
+  - state id (`[[[actor+0x270]+0x188]+0x1C0]+0x28`, or `+0x4C` when that is `0x11A`) is `0x22`, `0x23`, `0x24`, `0x56`
+    or `0xFF` (unless P`+0xE5D` bit 2), or `0x9C`;
+  - P`+0x21` bit 1, `[[main+0x4E94840]+0x68]` ≠ 0 (probably an event running), `+0xB8` bit 14, P`+0x13D0` bit 9;
+  - not grounded (P`+0x13D0` bit 2) and not standing on a body;
+  - on a body: P`+0x1C34 & 0xC8`, P`+0x13D0 & 0x1182800`, P`+0x2C` bit 19, or the P`+0x15D4` timer > 0;
+  - hard-coded boxes in WaterTemple and CrumblingGanonCastle;
+  - deep water (water info `+0x78` depth, `+0x38` surface y, compared with Link's y).
+
+  On map collision the point becomes the actor's position (`actor+0x31C`), stored at P`+0x18A4` with yaw P`+0x18C4`,
+  and P`+0x18B0` = 1 (ready; P`+0x30` bit 11 is set too). On a body (a moving block, a platform) `main+0x2E7FE80`
+  decides; a refusal sets the cooldown P`+0x18CC` = 35, which counts down and blocks the hand-off below; unsafe
+  frames set it to 1. P`+0x1948` not NaN: an area sensor forces the point (P`+0x1950..0x1974`). A second copy at
+  P`+0x18B4`/`+0x18C8` is used while P`+0x1C34` bit 4. The void-out respawn (`main+0x2814620`) warps to the same
+  point; `main+0x30170E0` reads it too.
+- **The hand-off** at `main+0x60830C` (inside `main+0x6080C0`, which also writes `PlayerStatus.CurrentPos` /
+  `CurrentDir` every frame) copies it to AutoSaveMgr (scene component 12, §9.3) slot B: yaw `+0x178`, position
+  `+0x17C`, valid `+0x188` = 1, `+0x189`, `+0x18A`. Slot A (`+0x198` yaw, `+0x19C` position, valid `+0x1A8`) comes from
+  elsewhere and wins when valid.
+- **SavePos:** every frame AutoSaveMgr's update (`main+0x32762B0`) writes the chosen slot to `PlayerStatus.SavePos`
+  (member `0x796246EA`) and `SavePosRadY` (member `0x3BE1E51E`, MurmurHash3 of that name) and sets bool
+  `0x945046CE`. A save stores both CurrentPos and SavePos. SavePos always equals the restart point and CurrentPos
+  Link's position; saving from the same spot reloads at the same place every time (it isn't a timing effect).
+- **The load:** `TitleToMainWithLoadSave` places Link at SavePos / SavePosRadY, then `SceneBeginning.module.ainb`
+  runs `SeqQueryPlayerSearchSafetyPlace` (input Position, IsRiding) and `SeqOneShotSetPlayerPos` with its result
+  (`IsWaitBeforePlayerSafetyPos` waits for it).
+- **The query node** (name `0x3302290`, vtable slot `0x4BCF368`, binder `0xD87BA0`), calc `main+0x945220`:
+  - the player: `main+0x945110` (node → scene) → `main+0x945170` (scene component `[S+0x58]+0x78`, ResidentActorMgr,
+    component 15) → `main+0x37CCA0` → `main+0x375BA0(&handle, 0, 1)`, a counted handle with the actor at `+8`,
+    released by `main+0x947300(handle+0x20)` when its byte `+0x10` is 1. Probably the actor `link_actor()` returns
+    (not checked);
+  - Position is `[node+0x20] & ~3`, the output `[node+0x30] & ~3`, IsRiding `[[node+0x28]]`; if riding,
+    `main+0x30256C0(player, &info)` fills an 8-byte info `{u32, u8}`, passed only when its u32 isn't 0;
+  - `found = main+0x945310(player, &pos, &out, riding_info_or_NULL, 0, 0)`, stored at `node+0x38`.
+- **`main+0x945310`** (the search):
+  - `main+0xA47390(&flag, &a, &b, player, &pos, riding)` checks the spot, with extents = an empty box copied from
+    `[main+0x4C7F978]` (FLT_MAX / -FLT_MAX). What it checks isn't known. It sets `fallback` (below): 1 when flag = 1
+    and (`a` = 0 or `b` ≠ 4), else 0.
+  - Riding, or the check failed: `main+0xA46090` searches sideways. If it finds a place the result is (x, saved y, z)
+    and the search stops.
+  - Otherwise (or if that failed) `main+0x3024A20` runs the ring search. If it finds nothing, out = the input and
+    found = 0.
+- **The ring search** `main+0x3024A20(out, player, &pos, fallback, extents, riding, info, flag)`. Candidate offsets
+  (x, y, z) from the saved point, in the order tested:
+
+  | ring | radius | directions | heights y |
+  |---|---|---|---|
+  | 1 | 1, plus the centre | 8: +z, +x+z, +x, +x-z, -z, -x-z, -x, -x+z | centre 0/2/4, the 8 around it 0/1/2 |
+  | 2 | 2 | 8, turned 22.5° | 0/2/4 |
+  | 3 | 3 | 8 | 0/2/4 |
+  | 4 | 4 | 8, turned 22.5° | 0/2/4 |
+  | 5 | 5 | 8 | 0/2/4 |
+
+  Inside a ring it goes height by height (all directions at the first height, then the next). Riding: the first
+  height only. At most 123 candidates (41 riding).
+  - It stops after the first ring with a candidate that is both *found* and *good*. After ring 5 with none good: if
+    `fallback` and something was found, it takes the best found; otherwise out = input and it returns 0.
+- **One candidate** `main+0x3025930`:
+  - the ground under it: `main+0xA46090(..., 1, ...)`;
+  - a line-of-sight ray `main+0xA47B40` from the saved point + half Link's height to that ground + half his height
+    (height from `main+0x601D80`); blocked → rejected;
+  - good = `main+0x3025B70`: straight or L-shaped sweeps (`main+0x3025C90`) between the two;
+  - the best so far: good beats not good, then the nearest.
+- **Nothing checks that Link could walk there** beyond that ray and those sweeps. That is how a point gets past a wall.
+- **In game:** a load that put Link past a wall matched a ring-5 candidate exactly (direction +x-z, height 4, landing
+  on the ground just above it), so the point itself and rings 1–4 had all failed; other spots reloaded exactly where
+  saved. Arrivals after Farore's Wind are its own warp, not this search.
+  - Guess (not verified): that point was slightly below the nearby floor, inside collision. That would fail the
+    near candidates, while rays and sweeps that start inside geometry pass through the wall behind it.
+- **Not known:** what `main+0xA47390` checks. GameSafetyMgr (`main+0x32857B0`, component 28) handles the story's
+  NoEscape areas (`StartPos_` anchors; 28 entries in RSDB `GameSafetySetting.Product.111`); not looked at further.
+
+**The mod's preview** (`savepos.c`, scene > save position):
+- AutoSaveMgr is found among the current scene's components by its update (`main+0x32762B0`) in its vtable; slots A
+  and B are read from it and drawn, the one SavePos takes marked.
+- Where a load would put Link: `main+0x945310(link_actor(), &pos, &out, NULL, 0, 0)` with pos = the slot SavePos
+  takes; `out` is 3 floats, it returns found. Riding Epona the game passes a riding info (built by `main+0x30256C0`);
+  the preview always searches as on foot.
+- **Link's own body is part of the scene the search sees.** On a load he stands on the point; elsewhere his body can
+  be taken for ground or block a sweep. So the search is run while he stands on the point and that answer kept when
+  he walks off; a point he isn't on is searched as it is and marked approximate.
+- **It tests today's geometry, not the reloaded scene's:** a moving block will be back at its starting place after
+  a load, and actors placed since will be gone. The preview is only exact on static map collision.
+- Cost: up to 123 candidates, each with ground casts, a ray and sweeps, so it's run only when the point changes (at
+  most every few frames while it moves) and refreshed now and then while Link stands on it.
+- In Ghidra `thunk_FUN_03c41c50` is marked no-return, so decompiles stop after it (FUN_00945220, FUN_00375BA0):
+  read the disassembly (`tools/re64.py dump/v131072 func <offset>`).

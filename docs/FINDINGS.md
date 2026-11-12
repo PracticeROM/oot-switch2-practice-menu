@@ -645,6 +645,10 @@ Each of these was tried and verified not to help:
   type entry by two known Vector3 hashes in its hash table; the size by the objects' repeating vtable; the value by
   the copy every other field type keeps right after its value) and logs what it found ("gamedata: Vector3
   fields: ..."), with the first object's words. If the watch shows `-`, that log line says how far it got.
+- **The marker:** scene > respawn marker (`spawnmark.c`) draws that position in the world: a ring on the spot, a
+  post up from it and a line to it from Link, in yellow, over everything (the game's style only; off at each
+  start). It shows the saved position as it is: the game may still move Link from it on a load (to the ground
+  under it, or to a start point).
 - **Not done:** predicting the place with ray casts of our own. That needs the game's load code (which start point or
   ground test it uses) and a way to cast against the map's collision, neither of which is known; reading the
   game's own value comes first.

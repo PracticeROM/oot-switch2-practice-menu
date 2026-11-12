@@ -27,6 +27,7 @@
 #include "font.h"
 #include "airwall.h"
 #include "enemyhp.h"
+#include "spawnmark.h"
 #include "gfx.h"
 #include "gamefont.h"
 #include "gpuui.h"
@@ -161,6 +162,7 @@ static void hook_present(nvn_queue_t *queue, nvn_window_t *window, int index)
   gfx_release();
   airwall_release();
   enemyhp_release();
+  spawnmark_release();
   real_present(queue, window, index);
 }
 
@@ -1678,7 +1680,9 @@ static void draw_overlay(nvn_queue_t *queue, nvn_window_t *window, int index)
   const gfx_screen_t *screen = gfx_published();
   airwall_take(); /* the overlays' newest frame: lines and bars for the GPU, or rectangles */
   enemyhp_take();
-  int n_dots, n_hp, n_lines, n_bars;
+  spawnmark_take();
+  int n_dots, n_hp, n_lines, n_bars, n_mark;
+  spawnmark_lines(&n_mark); /* (drawn on the GPU only: overlayui.c) */
   const aw_dot_t *dots = airwall_published(&n_dots);
   const aw_dot_t *hp = enemyhp_published(&n_hp);
   airwall_lines(&n_lines);
@@ -1686,7 +1690,7 @@ static void draw_overlay(nvn_queue_t *queue, nvn_window_t *window, int index)
   /* the enemies the next frame's depth copy looks at (none: it looks at none) */
   scenedepth_ask_bars(bars, gpu_state == GPU_READY && gfx_style == GFX_STYLE_GAME && !enemy_hp_xray ? n_bars : 0);
   int pause_icon = gfx_pause_icon;
-  if ((!screen && !n_dots && !n_hp && !n_lines && !n_bars && !pause_icon) || overlay_state == OV_FAILED)
+  if ((!screen && !n_dots && !n_hp && !n_lines && !n_bars && !n_mark && !pause_icon) || overlay_state == OV_FAILED)
     return;
   if (index < 0 || index >= swapchain_texture_count) {
     static bool warned;

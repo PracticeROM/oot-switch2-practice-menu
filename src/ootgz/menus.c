@@ -17,6 +17,7 @@
 #include "levitate.h"
 #include "lock.h"
 #include "position.h"
+#include "spawnmark.h"
 #include "link.h"
 #include "menu.h"
 #include "input.h"
@@ -2194,12 +2195,25 @@ static void text_air_wall_link(menu_item_t *it, char *buf, int len)
   snprintf(buf, len, TF("link   %s"), text);
 }
 
+static bool get_spawn_marker(menu_item_t *it)
+{
+  return spawn_marker_shown;
+}
+
+static void set_spawn_marker(menu_item_t *it, bool on)
+{
+  spawn_marker_shown = on;
+}
+
 static void build_scene(void)
 {
-  menu_init(&m_scene, "scene", 7);
+  menu_init(&m_scene, "scene", 8);
   menu_item_t *reload = menu_add_action(&m_scene, "reload map", act_reload_map, 0);
   if (reload)
     reload->hint = "L: reload this map (at the age set in the link menu)";
+  menu_item_t *marker = menu_add_check(&m_scene, "respawn marker", get_spawn_marker, set_spawn_marker, 0);
+  if (marker)
+    marker->hint = "a ring where the save file has Link, and a line to it (the game's style; being tested)";
   menu_add_heading(&m_scene, "collision");
   menu_add_submenu(&m_scene, "environment", &m_collision);
   menu_add_heading(&m_scene, "enemies");

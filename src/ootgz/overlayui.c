@@ -20,6 +20,7 @@
 #include "gfx.h"
 #include "gpuui.h"
 #include "scenedepth.h"
+#include "spawnmark.h"
 #include "sys.h"
 #include "uishader.h"
 
@@ -389,6 +390,27 @@ static bool draw_bars(float w, float h, float px)
   return true;
 }
 
+/* --- the respawn marker (spawnmark.c) ------------------------------------------------------------------ */
+
+#define MARK_W 3.0f      /* its lines' solid middle */
+#define MARK_GLOW_W 9.0f
+#define MARK_QUADS 64    /* the most it takes: a glow and a line for each of its pieces */
+
+/* in yellow, a soft dark edge under each line so it reads on bright scenery; over everything (no depth) */
+static bool draw_mark(float w, float h, float px)
+{
+  int n;
+  const sm_line_t *lines = spawnmark_lines(&n);
+  if (!lines || !n)
+    return false;
+  const gpu_colour_t yellow = { 1.0f, 0.90f, 0.20f, 1 }, edge = { 0, 0, 0, 0.35f };
+  for (int pass = 0; pass < 2; pass++)
+    for (int i = 0; i < n; i++)
+      gpuui_line(lines[i].x0 * w, lines[i].y0 * h, lines[i].x1 * w, lines[i].y1 * h, (pass ? MARK_W : MARK_GLOW_W) * px,
+                 pass ? yellow : edge);
+  return true;
+}
+
 /* --- frame advance's icon ------------------------------------------------------------------------------ */
 
 /* At the top left as gz has it: two bars (paused), or a bar and a play triangle (advancing a frame), drawn
@@ -473,8 +495,11 @@ int overlayui_draw(int w, int h, int pause_icon)
   int n_bars;
   enemyhp_bars(&n_bars);
   n_bars = n_bars < MAX_BARS_DRAWN ? n_bars : MAX_BARS_DRAWN;
-  int for_lines = gpuui_quads_free() - (pause_icon ? PAUSE_QUADS : 0) - n_bars * BAR_QUADS;
+  int n_mark;
+  spawnmark_lines(&n_mark);
+  int for_lines = gpuui_quads_free() - (pause_icon ? PAUSE_QUADS : 0) - n_bars * BAR_QUADS - (n_mark ? MARK_QUADS : 0);
   return (draw_lines((float)w, (float)h, px, for_lines > 0 ? for_lines : 0) ? OVERLAY_LINES : 0) |
+         (draw_mark((float)w, (float)h, px) ? OVERLAY_MARK : 0) |
          (draw_bars((float)w, (float)h, px) ? OVERLAY_BARS : 0) |
          (draw_pause((float)w, (float)h, px, pause_icon) ? OVERLAY_PAUSE : 0);
 }

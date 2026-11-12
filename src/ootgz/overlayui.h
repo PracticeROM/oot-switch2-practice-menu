@@ -4,7 +4,7 @@
 
 #include <stdbool.h>
 
-enum { OVERLAY_LINES = 1, OVERLAY_BARS = 2, OVERLAY_PAUSE = 4 };
+enum { OVERLAY_LINES = 1, OVERLAY_BARS = 2, OVERLAY_PAUSE = 4, OVERLAY_MARK = 8 };
 
 /* render thread, in a gpuui frame over a w x h visible picture, with gfx_pause_icon's icon (0: none): what
  * it drew (OVERLAY_* bits) */

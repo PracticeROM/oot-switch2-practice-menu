@@ -30,6 +30,7 @@
 #include "divetest.h"
 #include "levitate.h"
 #include "settings.h"
+#include "spawnmark.h"
 #include "warp.h"
 #include "watches.h"
 #include "nvn.h"
@@ -370,6 +371,7 @@ static void frame(void)
   bool overlays_on_gpu = overlayui_on_gpu(); /* lines and bars for the GPU, else rectangles */
   airwall_frame(overlays_on_gpu);
   enemyhp_frame(overlays_on_gpu);
+  spawnmark_frame();
   menus_research_frame();
   watches_frame(menu_current != 0);
   levitate_frame(menu_current != 0);

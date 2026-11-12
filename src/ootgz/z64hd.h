@@ -82,6 +82,13 @@ struct z64hd_build {
   uint32_t cct_force_no_hit;  /* void (body, bool): queued, preserves filter state */
   uint32_t cct_set_position;  /* void (property, const vec3f_t *): updates attached bodies */
   uint32_t cct_set_velocity;  /* void (body, const vec3f_t *): queues linear velocity */
+  /* the scene manager (its current scene's components, FINDINGS 9.3) and AutoSaveMgr's update, which finds
+   * it among them (savepos.c, FINDINGS 9.7); 0: not known for this build */
+  uint32_t scene_mgr_ptr;
+  uint32_t autosave_update;
+  /* bool (actor, const float pos[3], float out[3], const void *riding, bool, int): the load's search for a safe
+   * place round SavePos (FINDINGS 9.7); 0: not known for this build */
+  uint32_t safety_search;
   struct z64hd_link_path link_paths[5];
 };
 

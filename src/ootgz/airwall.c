@@ -19,6 +19,7 @@
 #include "link.h"
 #include "lang.h"
 #include "publish.h"
+#include "savepos.h"
 #include "sys.h"
 #include "view.h"
 
@@ -645,11 +646,18 @@ void airwall_frame(bool gpu)
   int f = publish_next(&published), n = 0, nl = 0;
   n_walls_near = 0;
   link_boxes[f].ok = false;
-  bool draw = airwalls_shown && current_map && !game_is_paused();
+  bool walls = airwalls_shown && current_map;
+  bool draw = (walls || savepos_shown) && !game_is_paused();
   view_cam_t cam;
   if (draw && view_camera(&cam)) {
+    /* the save position's markers (savepos.c) first: a few lines the walls' budget never cuts */
+    static float mark_ends[SAVEPOS_MAX_LINES][2][3];
+    static uint8_t mark_colours[SAVEPOS_MAX_LINES];
+    int n_marks = savepos_lines(mark_ends, mark_colours, SAVEPOS_MAX_LINES);
+    for (int i = 0; i < n_marks; i++)
+      add_edge_dots(dots[f], &n, gpu ? lines[f] : 0, &nl, &cam, mark_ends[i][0], mark_ends[i][1], mark_colours[i]);
     /* nearest wall first, so the budget goes to what's close */
-    n_walls_near = sort_near_walls(&cam);
+    n_walls_near = walls ? sort_near_walls(&cam) : 0;
     for (int k = 0; k < n_walls_near && (gpu ? nl < MAX_LINES : n < MAX_DOTS); k++) {
       int i = near_order[k];
       const airwall_t *wall = map_wall(i);

@@ -111,6 +111,8 @@ and you'll come out at the chosen place. Under **return**: the **current** map a
 | **reload map** | Reloads the current map (at the age set in **link**). |
 | *collision* | |
 | **environment** | See below. |
+| *save and load* | |
+| **save position** | See [2.3.2](#232-save-position). |
 | *enemies* | |
 | **display enemy health** | A bar with **life/max** over each living enemy within 30 m of Link (red under a quarter); it goes when the enemy reaches 0. Enemies that haven't appeared yet (Wolfos still in the ground, Stalfos before they drop) have none, and none are drawn while the game is paused. In the game's style a bar fades out while its enemy is hidden behind walls or other scenery. |
 | **display through walls** | Also show the bars of enemies hidden behind the scenery (the game's style). Indented under **display enemy health**. |
@@ -130,6 +132,23 @@ and you'll come out at the chosen place. Under **return**: the **current** map a
 The two lines under the menu, below **return** and apart from its options, count the walls in this map and those near you, and say whether Link is inside one
 (how deep, and which way the game will push him out). Outlines show through the scenery; in the game's style
 Link stays in front of them.
+
+#### 2.3.2 Save position
+
+Where a save puts Link when it's loaded (1.1.1 only). A save doesn't keep where Link stands: it keeps a
+restart point, which follows him while the game finds his spot safe and stays behind when it doesn't (in the
+air, on a moving block or platform, in deep water, during some actions). The game keeps it in two slots and a
+save takes **A** if it's set, else **B**. On loading, the game also searches round that point for a safe place,
+up to 5 m away, so Link can still appear somewhere else.
+
+| Item | What it does |
+|---|---|
+| **show slots** | Draw each slot that's set as a ring on the ground, an arrow the way Link will face and a pole. **Pink**: slot A, **green**: slot B. A cross on the pole marks the one a save would keep. |
+| **where a load puts link** | **Yellow**: runs the game's own search round the slot a save would keep and draws its answer: a ring and a taller pole, and a line from the slot to it when the load would move Link. It tests the scene as it is now, so a moving block that would be back in its place after a load (or an enemy that would be gone) can make it differ. Link's own body counts in that search, so it's run while he stands on the slot (as he does on a load) and that answer is kept when he walks off; a slot he hasn't stood on is marked **approx.** until he does. Run as on foot, even on Epona. Indented under **show slots**; on by default. |
+
+The lines under the menu give each slot's x, y, z and the way Link will face (degrees), with a **\*** on
+the one a save would keep, or **not set**, or **not found** (the title screen, loading, 1.0.0); and where a load
+would put Link and how far that is from the slot, or **stays**.
 
 ### 2.4 Cheats
 
@@ -352,6 +371,7 @@ The name and version, the build date ("Build Date: ..."), and the website.
 | Input display | Bottom left, or the corner you choose, or anywhere | [2.10.1](#2101-input-display); in the bottom left, it moves above the watches if they're there too. |
 | Pause icon | Top left | Two bars: paused by frame advance. |
 | Air walls | Over the game | [2.3.1](#231-environment) |
+| Save slots | Over the game | [2.3.2](#232-save-position) |
 
 ## 4 About frame advance
 
@@ -377,7 +397,7 @@ game's pause screen closed):
 Settings are saved on the SD card in `sloperinaGZ/settings.ini` (on an emulator, its virtual SD card) a couple of
 seconds after you close the menu. It's plain `key=value` text: cheats, watches (which, in what order, their types,
 names and whether shown), the watches box, menu size, background, hiding in game menus, language, input display,
-levitate and frame advance. Delete it to go back to the defaults. Your game saves are never touched.
+levitate, frame advance and save position. Delete it to go back to the defaults. Your game saves are never touched.
 
 The game's pictures sloperinaGZ uses (the controllers in the input display, the menus' parts, the item icons)
 are kept in `sloperinaGZ/cache/` once they're made from your copy of the game, so later starts don't have to make

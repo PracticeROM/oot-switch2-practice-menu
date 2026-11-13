@@ -126,6 +126,9 @@ and you'll come out at the chosen place. Under **return**: the **current** map a
 | **that stop link** | **Cyan**: invisible walls he can't go through (round the rocks in the Lost Woods). On by default. |
 | **other kinds** | **Violet**: walls that don't touch Link on foot: those for enemies, NPCs, animals, Epona, the camera, bombs and the hookshot, and those that only stop him while he climbs. |
 | **through link** | Also draw them where Link is in front of them (in the game's style they're hidden behind him). |
+| **fill faces** | Fill the walls' faces, see-through, in a checker of 0.5 m squares in each wall's colour, under the outlines (the game's style only). Box walls have all six faces filled; round walls their sides (not their round ends). Nothing hides the faces, so by default only the walls near Link are filled. Not yet checked in game. |
+| **faces of** | **near link**: only the walls within the distance below (the default); **all**: every wall the outlines show (those within 60 m of the camera). |
+| **within (m)** | How near Link (metres, 1 to 60; 10 by default) a wall must be for **near link**. D-left/right change it; with L held, by 10. |
 
 The two lines under the menu, below **return** and apart from its options, count the walls in this map and those near you, and say whether Link is inside one
 (how deep, and which way the game will push him out). Outlines show through the scenery; in the game's style

@@ -98,6 +98,9 @@ typedef struct {
   int32_t airwalls_block;
   int32_t airwalls_all;
   int32_t airwalls_xray;
+  int32_t airwalls_fill;
+  int32_t airwalls_fill_near;
+  int32_t airwalls_fill_range;
   int32_t enemy_hp;
   int32_t enemy_hp_xray;
   int32_t menu_style;
@@ -165,6 +168,9 @@ static snapshot_t take_snapshot(void)
   s.airwalls_block = airwalls_block;
   s.airwalls_all = airwalls_all;
   s.airwalls_xray = airwalls_xray;
+  s.airwalls_fill = airwalls_fill;
+  s.airwalls_fill_near = airwalls_fill_near;
+  s.airwalls_fill_range = airwalls_fill_range;
   s.enemy_hp = enemy_hp_shown;
   s.enemy_hp_xray = enemy_hp_xray;
   s.menu_style = gfx_style;
@@ -245,6 +251,10 @@ static void apply_snapshot(const snapshot_t *s)
   airwalls_block = s->airwalls_block != 0;
   airwalls_all = s->airwalls_all != 0;
   airwalls_xray = s->airwalls_xray != 0;
+  airwalls_fill = s->airwalls_fill != 0;
+  airwalls_fill_near = s->airwalls_fill_near != 0;
+  if (s->airwalls_fill_range >= AW_FILL_RANGE_MIN && s->airwalls_fill_range <= AW_FILL_RANGE_MAX)
+    airwalls_fill_range = s->airwalls_fill_range;
   enemy_hp_shown = s->enemy_hp != 0;
   enemy_hp_xray = s->enemy_hp_xray != 0;
 }
@@ -326,6 +336,9 @@ static const struct { const char *key; size_t field_offset; } int_keys[] = {
   INT_KEY("airwalls_block", airwalls_block),
   INT_KEY("airwalls_all", airwalls_all),
   INT_KEY("airwalls_xray", airwalls_xray),
+  INT_KEY("airwalls_fill", airwalls_fill),
+  INT_KEY("airwalls_fill_near", airwalls_fill_near),
+  INT_KEY("airwalls_fill_range", airwalls_fill_range),
   INT_KEY("enemy_health", enemy_hp),
   INT_KEY("enemy_health_xray", enemy_hp_xray),
   INT_KEY("menu_style", menu_style),
@@ -532,6 +545,11 @@ static void save_settings_file(const snapshot_t *s)
                   (int)s->menu_scale, (int)s->input_display, (int)s->input_display_bg, (int)s->input_parts,
                   (int)s->input_style, (int)s->input_size, (int)s->input_position, (int)s->input_x,
                   (int)s->input_y, (int)s->menu_style, (int)s->hide_in_game_menus);
+  if (n < (int)sizeof(buf))
+    n += snprintf(buf + n, sizeof(buf) - n,
+                  "airwalls_xray=%d\nairwalls_fill=%d\nairwalls_fill_near=%d\nairwalls_fill_range=%d\nenemy_health_xray=%d\n",
+                  (int)s->airwalls_xray, (int)s->airwalls_fill, (int)s->airwalls_fill_near, (int)s->airwalls_fill_range,
+                  (int)s->enemy_hp_xray);
   for (int w = 0; w < W_COUNT && n < (int)sizeof(buf); w++)
     if (s->watch_labels[w][0])
       n += snprintf(buf + n, sizeof(buf) - n, WATCH_LABEL_KEY "%d=%s\n", w, s->watch_labels[w]);

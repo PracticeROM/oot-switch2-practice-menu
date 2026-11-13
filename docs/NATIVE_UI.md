@@ -106,6 +106,12 @@ Read with [KillzXGaming/ShaderLibrary](https://github.com/KillzXGaming/ShaderLib
     glyph's shadow into its image (luminance 0 where only the shadow shows), where a glyph and its shadow drawn
     apart were two. **Not yet checked in game** (written without a console or an emulator to hand): the RG8 atlas
     and its swizzle are the part to look at first if text is missing or the wrong colour.
+  - Quads can also be placed in the world (`gpuui_world_camera`, `gpuui_world_face`): the vertex stage's view
+    uniform is rebound to the game camera's projection (built on the CPU from `view.c`'s camera, in NVN's depth mode
+    so the near plane clips what's behind the camera), and an element's 3x4 matrix takes the unit square to a
+    parallelogram in metres. The air walls' filled faces use it, with a 64x64 R8 checker (two cells each way) that
+    has a sampler of its own set to repeat. Checked on the PC against `view_screen` (the outlines' projection): within
+    0.15 px at 1080p. **Not yet checked in game.**
   - A frame has room for some 4000 quads. `nvn.c` keeps 2000 of them back for the panels while the air walls and
     the enemies' health are drawn under them (`gpuui_reserve`), and `overlayui.c` shares the rest out (the bars
     first, then the lines, their glows last), so a busy scene can't cost the menu its text.

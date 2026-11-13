@@ -101,6 +101,13 @@ void gpuui_image(int i, float x, float y, float w, float h, const float crop[4],
  * frame) */
 void gpuui_image_mapped(int i, float x, float y, float w, float h, const float crop[4], gpu_colour_t black,
                         gpu_colour_t white, float alpha);
+/* Quads in the world, seen by the game's camera: gpuui_world_camera once a frame (before the faces), then each
+ * face, the parallelogram o, o + u, o + v, o + u + v (metres), see-through in a checker (a small texture that
+ * repeats su times along u and sv along v) in colour. Drawn over the scenery (nothing hides them). */
+struct view_cam;
+void gpuui_world_camera(const struct view_cam *cam);
+bool gpuui_world_ready(void);
+void gpuui_world_face(const float o[3], const float u[3], const float v[3], float su, float sv, gpu_colour_t colour);
 /* true: the frame's depth was bound (and cleared, if asked) */
 bool gpuui_end(nvn_obj_t *cmd, const void *game_texture_pool, const void *game_sampler_pool);
 

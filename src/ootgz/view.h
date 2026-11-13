@@ -4,7 +4,7 @@
 
 #include <stdbool.h>
 
-typedef struct {
+typedef struct view_cam {
   float pos[3], forward[3], right[3], up[3];
   float tan_x, tan_y; /* tangents of half the horizontal and vertical fov */
   float near, far;    /* its projection's planes (metres ahead) */

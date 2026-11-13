@@ -28,6 +28,8 @@ float sqrtf(float x);
 
 bool airwalls_shown, airwalls_all, airwalls_xray;
 bool airwalls_push = true, airwalls_block = true;
+bool airwalls_fill, airwalls_fill_near = true;
+int airwalls_fill_range = 10;
 
 #define AW_RANGE 60.0f
 #define MAX_WALLS 512
@@ -71,11 +73,16 @@ static struct {
   float R[9]; /* rotation, row-major */
   float centre[3], radius;
   uint16_t first_edge, n_edges;
+  uint16_t first_face, n_faces;
 } wall_geo[MAX_WALLS];
 static int n_walls;
 static float points[MAX_POINTS][3];
 static uint16_t edges[MAX_EDGES][2];
 static int n_points, n_edges;
+/* the walls' faces, to fill: a box's six, a cylinder's sides (its ends are round: not filled) */
+#define MAX_FACE_GEO 4096
+static struct { float o[3], u[3], v[3]; } face_geo[MAX_FACE_GEO];
+static int n_face_geo;
 
 static const airwall_t *map_wall(int index)
 {
@@ -124,6 +131,19 @@ static int add_point(const float p[3])
   return n_points++;
 }
 
+/* the face o, o + u, o + v (o + u + v) from three points */
+static void add_face(int o, int a, int b)
+{
+  if (o < 0 || a < 0 || b < 0 || n_face_geo >= MAX_FACE_GEO)
+    return;
+  for (int i = 0; i < 3; i++) {
+    face_geo[n_face_geo].o[i] = points[o][i];
+    face_geo[n_face_geo].u[i] = points[a][i] - points[o][i];
+    face_geo[n_face_geo].v[i] = points[b][i] - points[o][i];
+  }
+  n_face_geo++;
+}
+
 static void add_edge(int a, int b)
 {
   if (a >= 0 && b >= 0 && n_edges < MAX_EDGES) {
@@ -150,6 +170,11 @@ static void add_box(const airwall_t *wall, const float R[9], const airshape_t *b
     for (int axis = 0; axis < 3; axis++)
       if (!(corner >> axis & 1))
         add_edge(base + corner, base + (corner | 1 << axis));
+  for (int axis = 0; axis < 3; axis++) /* a face each side of each axis: its corner, along the other two axes */
+    for (int side = 0; side < 2; side++) {
+      int o = side << axis, a = 1 << (axis + 1) % 3, b = 1 << (axis + 2) % 3;
+      add_face(base + o, base + (o | a), base + (o | b));
+    }
 }
 
 /* A cylinder: rings at both ends, joined by four side lines. */
@@ -174,6 +199,7 @@ static void add_cylinder(const airwall_t *wall, const float R[9], const airshape
     add_edge(base + CYLINDER_SEGMENTS + j, base + CYLINDER_SEGMENTS + (j + 1) % CYLINDER_SEGMENTS);
     if (j % CYLINDER_SIDE_EVERY == 0)
       add_edge(base + j, base + CYLINDER_SEGMENTS + j);
+    add_face(base + j, base + (j + 1) % CYLINDER_SEGMENTS, base + CYLINDER_SEGMENTS + j); /* a strip of its side */
   }
 }
 
@@ -203,11 +229,13 @@ static void build_map_geometry(const airmap_t *map)
   n_walls = 0;
   n_points = 0;
   n_edges = 0;
+  n_face_geo = 0;
   for (int i = 0; i < map->n && n_walls < MAX_WALLS; i++) {
     const airwall_t *wall = &data_airwalls[map->first + i];
     __typeof__(wall_geo[0]) *geo = &wall_geo[n_walls++];
     rotation_matrix(wall->r, geo->R);
     geo->first_edge = (uint16_t)n_edges;
+    geo->first_face = (uint16_t)n_face_geo;
     int first_point = n_points;
     for (int k = 0; k < wall->n_shapes; k++) {
       const airshape_t *shape = &data_airshapes[wall->first_shape + k];
@@ -217,9 +245,11 @@ static void build_map_geometry(const airmap_t *map)
         add_cylinder(wall, geo->R, shape);
     }
     geo->n_edges = (uint16_t)(n_edges - geo->first_edge);
+    geo->n_faces = (uint16_t)(n_face_geo - geo->first_face);
     bounding_sphere(wall, first_point, geo->centre, &geo->radius);
   }
-  log_printf("air walls: %s: %d of %d walls, %d points, %d edges", map->map, n_walls, map->n, n_points, n_edges);
+  log_printf("air walls: %s: %d of %d walls, %d points, %d edges, %d faces", map->map, n_walls, map->n, n_points, n_edges,
+             n_face_geo);
 }
 
 static bool str_equal(const char *a, const char *b)
@@ -362,6 +392,11 @@ static int n_dots[PUBLISH_BUFFERS];
 #define MAX_LINES 2048 /* more than overlayui.c draws */
 static aw_line_t lines[PUBLISH_BUFFERS][MAX_LINES];
 static int n_lines[PUBLISH_BUFFERS];
+/* the faces to fill, and the camera they go with (the game's style) */
+#define MAX_FACES 768
+static aw_face_t faces[PUBLISH_BUFFERS][MAX_FACES];
+static int n_faces[PUBLISH_BUFFERS];
+static view_cam_t face_cams[PUBLISH_BUFFERS];
 static publish_t published = PUBLISH_INIT;
 static int taken = -1; /* the render thread's, from airwall_take to airwall_release */
 static int n_walls_near;
@@ -637,12 +672,54 @@ static int sort_near_walls(const view_cam_t *cam)
   return count;
 }
 
+/* The faces to fill, from near_order (sort_near_walls): those of the walls near Link (or all of them), farthest
+ * wall first; the nearest walls' when there are more than MAX_FACES. */
+static int add_faces(aw_face_t *out)
+{
+  vec3f_t link;
+  bool near_only = airwalls_fill_near;
+  if (near_only && !link_drawn_pos(&link))
+    return 0;
+  float range = (float)airwalls_fill_range;
+  int last = 0, total = 0; /* near_order[0..last) are the walls whose faces fit */
+  for (int k = 0; k < n_walls_near; k++) {
+    int i = near_order[k];
+    if (near_only) {
+      float dx = wall_geo[i].centre[0] - link.x, dy = wall_geo[i].centre[1] - link.y, dz = wall_geo[i].centre[2] - link.z;
+      if (sqrtf(dx * dx + dy * dy + dz * dz) - wall_geo[i].radius > range)
+        continue;
+    }
+    if (total + wall_geo[i].n_faces > MAX_FACES)
+      break;
+    total += wall_geo[i].n_faces;
+    last = k + 1;
+  }
+  int n = 0;
+  for (int k = last - 1; k >= 0; k--) { /* farthest first */
+    int i = near_order[k];
+    if (near_only) {
+      float dx = wall_geo[i].centre[0] - link.x, dy = wall_geo[i].centre[1] - link.y, dz = wall_geo[i].centre[2] - link.z;
+      if (sqrtf(dx * dx + dy * dy + dz * dz) - wall_geo[i].radius > range)
+        continue;
+    }
+    uint8_t color = i == link_wall ? AW_INSIDE : wall_colour(map_wall(i));
+    for (int g = wall_geo[i].first_face; g < wall_geo[i].first_face + wall_geo[i].n_faces && n < MAX_FACES; g++) {
+      aw_face_t *face = &out[n++];
+      memcpy(face->o, face_geo[g].o, sizeof(face->o));
+      memcpy(face->u, face_geo[g].u, sizeof(face->u));
+      memcpy(face->v, face_geo[g].v, sizeof(face->v));
+      face->color = color;
+    }
+  }
+  return n;
+}
+
 void airwall_frame(bool gpu)
 {
   frame_number++;
   if (airwalls_shown)
     check_now();
-  int f = publish_next(&published), n = 0, nl = 0;
+  int f = publish_next(&published), n = 0, nl = 0, nf = 0;
   n_walls_near = 0;
   link_boxes[f].ok = false;
   bool draw = airwalls_shown && current_map && !game_is_paused();
@@ -659,10 +736,14 @@ void airwall_frame(bool gpu)
     }
     if (gpu && nl)
       find_link_box(&cam, &link_boxes[f]);
+    if (gpu && airwalls_fill)
+      nf = add_faces(faces[f]);
+    face_cams[f] = cam;
   }
   n_dots[f] = n;
   n_lines[f] = nl;
-  publish_set(&published, n || nl ? f : -1);
+  n_faces[f] = nf;
+  publish_set(&published, n || nl || nf ? f : -1);
 }
 
 void airwall_take(void)
@@ -674,6 +755,14 @@ const aw_line_t *airwall_lines(int *n)
 {
   *n = taken < 0 ? 0 : n_lines[taken];
   return taken < 0 ? 0 : lines[taken];
+}
+
+const aw_face_t *airwall_faces(int *n, const view_cam_t **cam)
+{
+  *n = taken < 0 ? 0 : n_faces[taken];
+  if (cam)
+    *cam = taken < 0 ? 0 : &face_cams[taken];
+  return taken < 0 ? 0 : faces[taken];
 }
 
 bool airwall_link_box(float rect[4], float front[3], float back[3], float ground[3])

@@ -12,6 +12,12 @@ extern bool airwalls_push;  /* the ones that push Link off (he can't stand on th
 extern bool airwalls_block; /* the ones that stop him (invisible walls) */
 extern bool airwalls_all;   /* the kinds that don't touch Link on foot (enemies, NPCs, animals, camera...) */
 extern bool airwalls_xray;  /* also where Link is in front of them (else hidden behind him) */
+/* their faces filled, see-through (the game's style only): those near Link, or all the outlines show */
+extern bool airwalls_fill;
+extern bool airwalls_fill_near;   /* only the walls within airwalls_fill_range of Link */
+extern int airwalls_fill_range;   /* metres, AW_FILL_RANGE_MIN..MAX */
+#define AW_FILL_RANGE_MIN 1
+#define AW_FILL_RANGE_MAX 60
 
 /* a piece of an outline: a rectangle of the visible picture, 0..65535 each way, colour index. A side
  * thinner than the line width (a dot, or a straight piece of a line) is widened to it when drawn. */
@@ -23,6 +29,10 @@ typedef struct { uint16_t x0, y0, x1, y1; uint8_t color; } aw_dot_t;
  * moved toward the camera by a margin: overlayui.c hides the lines where Link is nearer), colour index */
 typedef struct { float x0, y0, x1, y1, near, d0, d1; uint8_t color; } aw_line_t;
 
+/* a face to fill, in the world (metres): the parallelogram o, o + u, o + v, o + u + v; colour index. Faces are
+ * handed over farthest wall first, so drawn in order the nearer ones go over them. */
+typedef struct { float o[3], u[3], v[3]; uint8_t color; } aw_face_t;
+
 /* game thread, once per frame: lines for the GPU, or (gpu false) rectangles */
 void airwall_frame(bool gpu);
 /* render thread: once a frame, before the calls after it, takes the newest frame the game thread made (publish.h);
@@ -30,6 +40,9 @@ void airwall_frame(bool gpu);
 void airwall_take(void);
 const aw_dot_t *airwall_published(int *n);
 const aw_line_t *airwall_lines(int *n);
+/* ... and the faces to fill, with the camera they were worked out with (for drawing them in the world) */
+struct view_cam;
+const aw_face_t *airwall_faces(int *n, const struct view_cam **cam);
 void airwall_release(void);
 /* render thread: Link's box with those lines: the rectangle round him (0..1 across and down the visible
  * picture) and the planes just in front of him, behind him and under him (the ground, lifted a little), each

@@ -22,6 +22,7 @@
 
 #include "sys.h"
 #include "uishader.h"
+#include "view.h"
 
 void *aligned_alloc(size_t align, size_t size); /* from main */
 void free(void *p);                             /* from main */
@@ -52,7 +53,7 @@ enum {
   BLEND_ONE = 2, BLEND_SRC_ALPHA = 5, BLEND_ONE_MINUS_SRC_ALPHA = 6, BLEND_ADD = 1,
   FACE_NONE = 0, PRIM_TRIANGLE_STRIP = 5,
   FMT_R8 = 0x01, FMT_RG8 = 0x0D, FMT_RG32F = 0x16, FMT_ASTC_4X4 = 0x79, TARGET_2D = 1,
-  SWIZZLE_ONE = 1, SWIZZLE_R = 2, SWIZZLE_G = 3, FILTER_LINEAR = 1, WRAP_CLAMP_TO_EDGE = 7,
+  SWIZZLE_ONE = 1, SWIZZLE_R = 2, SWIZZLE_G = 3, FILTER_LINEAR = 1, WRAP_REPEAT = 1, WRAP_CLAMP_TO_EDGE = 7,
   BARRIER_ORDER_PRIMITIVES = 1, BARRIER_ORDER_FRAGMENTS = 2, BARRIER_INVALIDATE_TEXTURE = 0x10,
   BARRIER_INVALIDATE_TEXTURE_DESCRIPTOR = 0x40, BARRIER_INVALIDATE_ZCULL = 0x80,
   DEPTH_FUNC_LESS = 2, DEPTH_FUNC_LEQUAL = 4, DEPTH_FUNC_ALWAYS = 8, DEPTH_MODE_NEAR_IS_MINUS_W = 0,
@@ -211,6 +212,15 @@ static _Alignas(16) uint8_t attribs[2 * 4]; /* NVN 2's vertex attribute state is
 static _Alignas(16) uint8_t streams[8];     /* ... its vertex stream state 8 */
 static nvn_obj_t atlas_builder, atlas, sampler_builder, sampler, texture_pool, sampler_pool;
 static nvn_handle_t atlas_handle;
+/* the faces' see-through checker (gpuui_world_face): a small R8 texture seen as (1, 1, 1, R), with a sampler
+ * of its own that repeats it */
+#define CHECKER_PX 64 /* the texture: two cells each way */
+#define CHECKER_CELL (CHECKER_PX / 2)
+#define CHECKER_LIGHT 255
+#define CHECKER_DARK 110
+static nvn_obj_t checker_builder, checker_tex, checker_sampler_builder, checker_sampler;
+static nvn_handle_t checker_handle;
+static bool checker_usable, checker_up;
 /* the descriptor pools: each descriptor's size, and the first IDs (NVN's own); ours come after them */
 static int texture_descriptor = 32, sampler_descriptor = 32, our_texture_id = 256, our_sampler_id = 256;
 
@@ -224,6 +234,7 @@ static int device_info(int item, int fallback, int most)
 }
 
 /* the data pool's layout */
+static size_t off_world_view, off_checker_staging, off_checker;
 static size_t off_vertices, off_view, off_shadow, off_material, off_mask, off_materials, off_textures, off_samplers, off_elements,
   off_staging, off_atlas, data_size;
 
@@ -328,10 +339,23 @@ static bool make_data(void)
   size_t atlas_align = g.tb_storage_align(&atlas_builder);
   if (atlas_align < PAGE)
     atlas_align = PAGE;
+  g.tb_device(&checker_builder, device);
+  g.tb_defaults(&checker_builder);
+  g.tb_target(&checker_builder, TARGET_2D);
+  g.tb_format(&checker_builder, FMT_R8);
+  g.tb_size(&checker_builder, CHECKER_PX, CHECKER_PX);
+  g.tb_levels(&checker_builder, 1);
+  g.tb_flags(&checker_builder, 0);
+  g.tb_swizzle(&checker_builder, SWIZZLE_ONE, SWIZZLE_ONE, SWIZZLE_ONE, SWIZZLE_R);
+  size_t checker_size = g.tb_storage_size(&checker_builder);
+  size_t checker_align = g.tb_storage_align(&checker_builder);
+  if (checker_align < PAGE)
+    checker_align = PAGE;
 
   size_t at = 0;
   off_vertices = at, at += UNIFORM_SIZE;
   off_view = at, at += UNIFORM_SIZE * SLOTS;
+  off_world_view = at, at += UNIFORM_SIZE * SLOTS;
   off_shadow = at, at += UNIFORM_SIZE;
   off_material = at, at += UNIFORM_SIZE;
   off_mask = at, at += UNIFORM_SIZE;
@@ -339,9 +363,9 @@ static bool make_data(void)
   at = round_up(at, PAGE);
   texture_descriptor = device_info(INFO_TEXTURE_DESCRIPTOR_SIZE, 32, 256);
   sampler_descriptor = device_info(INFO_SAMPLER_DESCRIPTOR_SIZE, 32, 256);
-  our_texture_id = device_info(INFO_RESERVED_TEXTURES, 256, POOL_ENTRIES - 2 - GPU_IMAGES); /* the atlas, the
+  our_texture_id = device_info(INFO_RESERVED_TEXTURES, 256, POOL_ENTRIES - 3 - GPU_IMAGES); /* the atlas, the
                                                                                     pictures, the lines' layer */
-  our_sampler_id = device_info(INFO_RESERVED_SAMPLERS, 256, POOL_ENTRIES - 1);
+  our_sampler_id = device_info(INFO_RESERVED_SAMPLERS, 256, POOL_ENTRIES - 2); /* ours, and the checker's */
   off_textures = at, at += (size_t)POOL_ENTRIES * texture_descriptor;
   at = round_up(at, PAGE);
   off_samplers = at, at += (size_t)POOL_ENTRIES * sampler_descriptor;
@@ -350,6 +374,9 @@ static bool make_data(void)
   off_staging = at, at += (size_t)ATLAS_STRIDE * ATLAS_H;
   at = round_up(at, atlas_align);
   off_atlas = at, at += atlas_size;
+  off_checker_staging = at, at += (size_t)CHECKER_PX * CHECKER_PX;
+  at = round_up(at, checker_align);
+  off_checker = at, at += checker_size;
   data_size = round_up(at, PAGE);
   data_mem = aligned_alloc(PAGE, data_size);
   if (!data_mem)
@@ -386,6 +413,26 @@ static bool make_data(void)
   g.texture_pool_register(&texture_pool, our_texture_id, &atlas, 0);
   g.sampler_pool_register(&sampler_pool, our_sampler_id, &sampler);
   atlas_handle = g.texture_handle(device, our_texture_id, our_sampler_id);
+
+  /* the checker: its texels into the staging copy (gpuui_end brings them up once), its repeating sampler */
+  uint8_t *texels = data_mem + off_checker_staging;
+  for (int y = 0; y < CHECKER_PX; y++)
+    for (int x = 0; x < CHECKER_PX; x++)
+      texels[y * CHECKER_PX + x] = ((x / CHECKER_CELL) ^ (y / CHECKER_CELL)) & 1 ? CHECKER_DARK : CHECKER_LIGHT;
+  g.tb_storage(&checker_builder, &data_pool, (ptrdiff_t)off_checker);
+  g.sb_device(&checker_sampler_builder, device);
+  g.sb_defaults(&checker_sampler_builder);
+  g.sb_filter(&checker_sampler_builder, FILTER_LINEAR, FILTER_LINEAR);
+  g.sb_wrap(&checker_sampler_builder, WRAP_REPEAT, WRAP_REPEAT, WRAP_REPEAT);
+  checker_usable = g.texture_init(&checker_tex, &checker_builder) && g.sampler_init(&checker_sampler, &checker_sampler_builder);
+  if (checker_usable) {
+    int checker_id = our_texture_id + 2 + GPU_IMAGES; /* after the atlas, the pictures and the lines' layer */
+    g.texture_pool_register(&texture_pool, checker_id, &checker_tex, 0);
+    g.sampler_pool_register(&sampler_pool, our_sampler_id + 1, &checker_sampler);
+    checker_handle = g.texture_handle(device, checker_id, our_sampler_id + 1);
+  } else {
+    log_printf("gpu drawing: the faces' checker texture didn't initialise; air wall faces off");
+  }
   return true;
 }
 
@@ -609,6 +656,7 @@ typedef struct {
   float w, h;
   float st[8];         /* the corners' texture coordinates */
   bool textured;
+  bool world;          /* in the world (gpuui_world_face): the matrix places it in metres, seen by the frame's camera */
   int8_t image;        /* textured: the atlas (-1) or a picture (gpuui_image) */
   uint8_t material;    /* 0 the plain material, else 1 + a frame's mapping */
   bool depth_tested;   /* hidden where the frame's depth is nearer (gpuui_line_depth) */
@@ -618,6 +666,8 @@ typedef struct {
 } quad_t;
 
 static quad_t quads[MAX_QUADS];
+static float world_view[16]; /* gpuui_world_camera's: world (metres) to clip space, column-major */
+static bool world_view_set;
 static int n_quads;
 static int quad_reserve; /* gpuui_reserve's: quads kept back from those made now, for what's drawn later */
 #define FRAME_QUADS (MAX_QUADS - LAYER_COLOURS - MASK_QUADS) /* the last elements are the lines' layer's */
@@ -636,6 +686,7 @@ static bool frame_depth_clear;
  * 1, 1, 1, coverage). A colour's layer is the same as drawing its lines straight onto the picture: over the
  * background B, a glow g then a line l of colour c give c (l + g - g l) + B (1 - g) (1 - l). */
 #define IMAGE_LAYER (-2)
+#define IMAGE_CHECKER (-3)
 #define LAYER_COLOURS 4 /* the colours a frame's depth tested quads may have (the air walls have 3) */
 #define MASK_QUADS 4    /* Link's mask: three, and the far depth round him */
 #define MATERIAL_MASK 0xFF
@@ -661,6 +712,7 @@ void gpuui_begin(nvn_texture_t *target, nvn_rect_t area, int texture_height, boo
 {
   n_quads = 0;
   quad_reserve = 0;
+  world_view_set = false;
   n_mappings = 0;
   quad_scale = 1;
   quad_alpha = 1;
@@ -686,6 +738,7 @@ static quad_t *new_quad(void)
     quads[n_quads].depth_tested = false;
     quads[n_quads].scale = quad_scale, quads[n_quads].sx = quad_sx, quads[n_quads].sy = quad_sy;
     quads[n_quads].alpha = quad_alpha;
+    quads[n_quads].world = false;
     return &quads[n_quads++];
   }
   static bool warned;
@@ -858,6 +911,59 @@ static float clip_z(float d)
 {
   bool gl = !gd.depth_mode || gd.depth_mode(device) == DEPTH_MODE_NEAR_IS_MINUS_W;
   return gl ? 2 * d - 1 : d;
+}
+
+/* --- quads in the world (gpuui_world_camera, gpuui_world_face) ---------------------------------------- */
+
+void gpuui_world_camera(const view_cam_t *cam)
+{
+  world_view_set = false;
+  if (!ready || !cam || cam->tan_x <= 0 || cam->tan_y <= 0 || cam->far <= cam->near || cam->near <= 0)
+    return;
+  /* camera space (view.c: right, up, forward), then clip space with w the distance ahead: x and y as
+   * view_screen puts them on the picture (up is +y, as the picture's view has its top), z the depth range's
+   * (GL's -w..w, or NVN's other mode 0..w), so the near plane cuts what's behind the camera */
+  float n = cam->near, f = cam->far;
+  bool gl = !gd.depth_mode || gd.depth_mode(device) == DEPTH_MODE_NEAR_IS_MINUS_W;
+  float a = gl ? (f + n) / (f - n) : f / (f - n), b = gl ? -2 * f * n / (f - n) : -f * n / (f - n);
+  const float *rows[4] = { cam->right, cam->up, cam->forward, cam->forward };
+  const float scale[4] = { 1 / cam->tan_x, 1 / cam->tan_y, a, 1 };
+  const float add[4] = { 0, 0, b, 0 };
+  for (int r = 0; r < 4; r++) {
+    const float *axis = rows[r];
+    float along = axis[0] * cam->pos[0] + axis[1] * cam->pos[1] + axis[2] * cam->pos[2];
+    for (int c = 0; c < 3; c++)
+      world_view[c * 4 + r] = scale[r] * axis[c];
+    world_view[3 * 4 + r] = -scale[r] * along + add[r];
+  }
+  world_view_set = true;
+}
+
+bool gpuui_world_ready(void)
+{
+  return ready && checker_usable && world_view_set;
+}
+
+void gpuui_world_face(const float o[3], const float u[3], const float v[3], float su, float sv, gpu_colour_t colour)
+{
+  if (!gpuui_world_ready())
+    return;
+  quad_t *q = new_quad();
+  if (!q)
+    return;
+  /* the element's matrix takes the quad's corner (0..1 each way, its size 1 x 1) to o + x u + y v */
+  float m[12] = { u[0], v[0], 0, o[0], u[1], v[1], 0, o[1], u[2], v[2], 0, o[2] };
+  __builtin_memcpy(q->m, m, sizeof(m));
+  for (int i = 0; i < 4; i++)
+    q->c[i] = colour;
+  q->w = 1;
+  q->h = 1;
+  q->scale = 1;
+  float st[8] = { 0, 0, su, 0, 0, sv, su, sv }; /* the checker repeats su times along u, sv along v */
+  __builtin_memcpy(q->st, st, sizeof(st));
+  q->textured = true;
+  q->image = IMAGE_CHECKER;
+  q->world = true;
 }
 
 /* quad q (translated, not turned) at a plane's depth: p[0] x + p[1] y + p[2], x and y 0..1 of the frame's area.
@@ -1283,7 +1389,10 @@ static void bind_frame(nvn_obj_t *cmd, size_t view_at)
 }
 
 /* what a pass has bound: its program, its picture (-1 the atlas), its material */
-typedef struct { int program, image, material; } draw_state_t;
+typedef struct { int program, image, material, world; } draw_state_t;
+
+/* the frame's views (gpuui_end): the picture's pixels, and the camera's for the world's quads */
+static size_t frame_view_at, frame_world_view_at;
 
 /* quad q, its element at `at`; false: out of command memory */
 static bool draw_quad(nvn_obj_t *cmd, const quad_t *q, size_t at, size_t materials, draw_state_t *st)
@@ -1307,10 +1416,17 @@ static bool draw_quad(nvn_obj_t *cmd, const quad_t *q, size_t at, size_t materia
                                   : data_gpu + off_material;
     g.cmd_uniform(cmd, STAGE_FRAGMENT, 4, m, 64);
   }
-  if (q->textured && q->image != st->image) { /* the atlas (bound by bind_frame), a picture or the lines' layer */
+  if (q->textured && q->image != st->image) { /* the atlas (bound by bind_frame), a picture, the lines' layer, the checker */
     st->image = q->image;
     g.cmd_texture(cmd, STAGE_FRAGMENT, 8,
-                  st->image == IMAGE_LAYER ? layer_handle : st->image < 0 ? atlas_handle : image_handle[st->image]);
+                  st->image == IMAGE_LAYER     ? layer_handle
+                  : st->image == IMAGE_CHECKER ? checker_handle
+                  : st->image < 0              ? atlas_handle
+                                               : image_handle[st->image]);
+  }
+  if (q->world != st->world) { /* the picture's view (bound by bind_frame) or the camera's */
+    st->world = q->world;
+    g.cmd_uniform(cmd, STAGE_VERTEX, 1, data_gpu + (st->world ? frame_world_view_at : frame_view_at), UNIFORM_SIZE);
   }
   write_element(data_mem + at, q);
   g.cmd_storage(cmd, STAGE_VERTEX, 6, data_gpu + at, ELEMENT_SIZE);
@@ -1327,6 +1443,13 @@ bool gpuui_end(nvn_obj_t *cmd, const void *game_texture_pool, const void *game_s
     g.cmd_barrier(cmd, BARRIER_INVALIDATE_TEXTURE_DESCRIPTOR);
     descriptors_new = false;
   }
+  if (checker_usable && !checker_up) { /* the checker's texels, once */
+    g.cmd_copy_stride(cmd, 0);
+    nvn_region_t all = { 0, 0, 0, CHECKER_PX, CHECKER_PX, 1 };
+    g.cmd_copy_to_texture(cmd, data_gpu + off_checker_staging, &checker_tex, 0, &all, 0);
+    g.cmd_barrier(cmd, BARRIER_ORDER_PRIMITIVES | BARRIER_ORDER_FRAGMENTS | BARRIER_INVALIDATE_TEXTURE);
+    checker_up = true;
+  }
   /* the rows the frame's new glyphs touched, up before they're drawn */
   if (dirty_bottom > dirty_top) {
     g.cmd_copy_stride(cmd, 0);
@@ -1342,6 +1465,10 @@ bool gpuui_end(nvn_obj_t *cmd, const void *game_texture_pool, const void *game_s
   float view[16] = { 2 / sw, 0, 0, 0, 0, -2 / sh, 0, 0, 0, 0, 1, 0, -1, 1, 0, 1 };
   size_t view_at = off_view + (size_t)frame_slot * UNIFORM_SIZE;
   __builtin_memcpy(data_mem + view_at, view, sizeof(view));
+  frame_view_at = view_at;
+  frame_world_view_at = off_world_view + (size_t)frame_slot * UNIFORM_SIZE;
+  if (world_view_set)
+    __builtin_memcpy(data_mem + frame_world_view_at, world_view, sizeof(world_view));
 
   /* the frame's colour mappings, in its slot's place: black and white of the texture to two colours */
   size_t materials = off_materials + (size_t)frame_slot * MAX_MATERIALS * UNIFORM_SIZE;
@@ -1375,7 +1502,7 @@ bool gpuui_end(nvn_obj_t *cmd, const void *game_texture_pool, const void *game_s
     if (frame_depth_clear) /* new: the far plane, before the game's depth is first copied in */
       gd.cmd_clear_depth(cmd, 1, true, 0, 0);
     bind_frame(cmd, view_at);
-    draw_state_t st = { -1, -1, 0 };
+    draw_state_t st = { -1, -1, 0, 0 };
     float rx = frame_only.x0 * sw, ry = frame_only.y0 * sh, rw = (frame_only.x1 - frame_only.x0) * sw,
           rh = (frame_only.y1 - frame_only.y0) * sh;
     quad_t in_front = { .c = { { 1, 1, 1, 1 }, { 1, 1, 1, 1 }, { 1, 1, 1, 1 }, { 1, 1, 1, 1 } }, .w = rw, .h = rh,
@@ -1419,7 +1546,7 @@ bool gpuui_end(nvn_obj_t *cmd, const void *game_texture_pool, const void *game_s
     gd.cmd_clear_colour(cmd, 0, clear, CLEAR_ALL_CHANNELS);
     bind_frame(cmd, view_at);
     g.cmd_depth(cmd, &depth_tested);
-    draw_state_t st = { -1, -1, 0 };
+    draw_state_t st = { -1, -1, 0, 0 };
     for (int i = 0; i < n_quads; i++)
       if (quads[i].depth_tested && quads[i].layer == k &&
           !draw_quad(cmd, &quads[i], elements + (size_t)i * ELEMENT_SIZE, materials, &st))
@@ -1437,7 +1564,7 @@ bool gpuui_end(nvn_obj_t *cmd, const void *game_texture_pool, const void *game_s
     float t0 = frame_lower_left ? 1 : 0, t1 = 1 - t0;
     float layer_st[8] = { 0, t0, 1, t0, 0, t1, 1, t1 };
     __builtin_memcpy(q.st, layer_st, sizeof(layer_st));
-    st = (draw_state_t){ -1, -1, 0 };
+    st = (draw_state_t){ -1, -1, 0, 0 };
     draw_quad(cmd, &q, elements + (size_t)(MAX_QUADS - LAYER_COLOURS + k) * ELEMENT_SIZE, materials, &st);
   }
 
@@ -1445,7 +1572,7 @@ bool gpuui_end(nvn_obj_t *cmd, const void *game_texture_pool, const void *game_s
   g.cmd_viewport(cmd, frame_area.x, vy, frame_area.w, frame_area.h);
   g.cmd_scissor(cmd, frame_area.x, vy, frame_area.w, frame_area.h);
   bind_frame(cmd, view_at);
-  draw_state_t st = { -1, -1, 0 };
+  draw_state_t st = { -1, -1, 0, 0 };
   for (int i = 0; i < n_quads; i++) /* the rest (the depth tested ones went in the layer) */
     if (!(quads[i].depth_tested && layered) &&
         !draw_quad(cmd, &quads[i], elements + (size_t)i * ELEMENT_SIZE, materials, &st))

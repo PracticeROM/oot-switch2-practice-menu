@@ -22,6 +22,7 @@
 #include "scenedepth.h"
 #include "sys.h"
 #include "uishader.h"
+#include "view.h"
 
 float sqrtf(float x); /* from sdk */
 
@@ -53,6 +54,34 @@ static const gpu_colour_t line_colours[AW_NCOLORS] = {
   [AW_OTHER] = { 0.66f, 0.58f, 1.0f, 1 },  /* violet: other kinds */
   [AW_PUSHES] = { 1.0f, 0.78f, 0.22f, 1 }, /* amber: pushes Link off */
 };
+
+/* The walls' faces (airwall.c, scene > collision > environment > fill faces): see-through, in the checker,
+ * each in its wall's colour, under the outlines. A quad a face. */
+#define FACE_ALPHA 0.22f     /* the checker's light cells; its dark ones are about half that (gpuui.c) */
+#define CHECKER_PERIOD_M 1.0f /* metres the checker takes to repeat: two 0.5 m cells */
+
+static float length3(const float v[3]) { return sqrtf(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]); }
+
+static bool draw_faces(int budget)
+{
+  int n;
+  const view_cam_t *cam;
+  const aw_face_t *faces = airwall_faces(&n, &cam);
+  if (!faces || !n || budget <= 0)
+    return false;
+  gpuui_world_camera(cam);
+  if (!gpuui_world_ready())
+    return false;
+  /* farthest wall first (airwall.c): short of quads, the farthest are the ones left out */
+  for (int i = n > budget ? n - budget : 0; i < n; i++) {
+    const aw_face_t *face = &faces[i];
+    gpu_colour_t c = line_colours[face->color < AW_NCOLORS ? face->color : 0];
+    c.a = FACE_ALPHA;
+    gpuui_world_face(face->o, face->u, face->v, length3(face->u) / CHECKER_PERIOD_M, length3(face->v) / CHECKER_PERIOD_M,
+                     c);
+  }
+  return true;
+}
 
 /* budget: the quads the lines may take. Short of them, the glows go first, then the farthest lines. */
 static bool draw_lines(float w, float h, float px, int budget)
@@ -473,8 +502,14 @@ int overlayui_draw(int w, int h, int pause_icon)
   int n_bars;
   enemyhp_bars(&n_bars);
   n_bars = n_bars < MAX_BARS_DRAWN ? n_bars : MAX_BARS_DRAWN;
-  int for_lines = gpuui_quads_free() - (pause_icon ? PAUSE_QUADS : 0) - n_bars * BAR_QUADS;
-  return (draw_lines((float)w, (float)h, px, for_lines > 0 ? for_lines : 0) ? OVERLAY_LINES : 0) |
+  int for_walls = gpuui_quads_free() - (pause_icon ? PAUSE_QUADS : 0) - n_bars * BAR_QUADS;
+  for_walls = for_walls > 0 ? for_walls : 0;
+  /* the walls' faces under their outlines: at most half of what the walls have */
+  int n_faces, before = gpuui_quads_free();
+  airwall_faces(&n_faces, 0);
+  int faces = draw_faces(n_faces < for_walls / 2 ? n_faces : for_walls / 2) ? OVERLAY_LINES : 0;
+  int for_lines = for_walls - (before - gpuui_quads_free());
+  return faces | (draw_lines((float)w, (float)h, px, for_lines > 0 ? for_lines : 0) ? OVERLAY_LINES : 0) |
          (draw_bars((float)w, (float)h, px) ? OVERLAY_BARS : 0) |
          (draw_pause((float)w, (float)h, px, pause_icon) ? OVERLAY_PAUSE : 0);
 }

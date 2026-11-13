@@ -2150,6 +2150,43 @@ static void set_air_walls_all(menu_item_t *it, bool on)
   airwalls_all = on;
 }
 
+static bool get_air_walls_fill(menu_item_t *it)
+{
+  return airwalls_fill;
+}
+
+static void set_air_walls_fill(menu_item_t *it, bool on)
+{
+  airwalls_fill = on;
+}
+
+static const char *const fill_which_names[] = { "near link", "all" };
+
+static int get_air_walls_fill_which(menu_item_t *it)
+{
+  return airwalls_fill_near ? 0 : 1;
+}
+
+static void set_air_walls_fill_which(menu_item_t *it, int choice)
+{
+  airwalls_fill_near = choice == 0;
+}
+
+static int32_t get_air_walls_fill_range(menu_item_t *it)
+{
+  return airwalls_fill_range;
+}
+
+static void set_air_walls_fill_range(menu_item_t *it, int32_t metres)
+{
+  airwalls_fill_range = metres < AW_FILL_RANGE_MIN ? AW_FILL_RANGE_MIN : metres > AW_FILL_RANGE_MAX ? AW_FILL_RANGE_MAX : metres;
+}
+
+static int32_t max_air_walls_fill_range(menu_item_t *it)
+{
+  return AW_FILL_RANGE_MAX;
+}
+
 static bool get_air_walls_xray(menu_item_t *it)
 {
   return airwalls_xray;
@@ -2216,7 +2253,7 @@ static void build_scene(void)
   }
   menu_add_return(&m_scene);
 
-  menu_init(&m_collision, "environment", 9);
+  menu_init(&m_collision, "environment", 12);
   menu_add_heading(&m_collision, "air walls");
   menu_item_t *show = menu_add_check(&m_collision, "show", get_air_walls_shown, set_air_walls_shown, 0);
   if (show) {
@@ -2247,6 +2284,26 @@ static void build_scene(void)
     xray->hint = "also where link is in front of them (the game's style)";
     xray->log_label = "air walls through link:";
     xray->indent = 2;
+  }
+  menu_item_t *fill = menu_add_check(&m_collision, "fill faces", get_air_walls_fill, set_air_walls_fill, 0);
+  if (fill) {
+    fill->hint = "see-through faces in the walls' colours (the game's style)";
+    fill->log_label = "air wall faces:";
+    fill->indent = 2;
+  }
+  menu_item_t *fill_which = menu_add_option(&m_collision, "faces of", 2, fill_which_names, get_air_walls_fill_which,
+                                            set_air_walls_fill_which, 0);
+  if (fill_which) {
+    fill_which->hint = "the walls near link (within the distance below), or all those shown";
+    fill_which->log_label = "air wall faces of";
+    fill_which->indent = 4;
+  }
+  menu_item_t *fill_range = menu_add_number(&m_collision, "within (m)", get_air_walls_fill_range, set_air_walls_fill_range,
+                                            max_air_walls_fill_range, 0, 0);
+  if (fill_range) {
+    fill_range->num_min = AW_FILL_RANGE_MIN;
+    fill_range->hint = "d-left/right: how near link a wall must be for its faces (L held: by 10)";
+    fill_range->indent = 4;
   }
   menu_add_return(&m_collision);
   /* the map's walls and link's: under the list, not part of it */

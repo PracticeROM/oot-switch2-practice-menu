@@ -1682,11 +1682,13 @@ static void draw_overlay(nvn_queue_t *queue, nvn_window_t *window, int index)
   const aw_dot_t *dots = airwall_published(&n_dots);
   const aw_dot_t *hp = enemyhp_published(&n_hp);
   airwall_lines(&n_lines);
+  int n_faces;
+  airwall_faces(&n_faces, 0); /* (the game's style only: overlayui.c) */
   const eh_bar_t *bars = enemyhp_bars(&n_bars);
   /* the enemies the next frame's depth copy looks at (none: it looks at none) */
   scenedepth_ask_bars(bars, gpu_state == GPU_READY && gfx_style == GFX_STYLE_GAME && !enemy_hp_xray ? n_bars : 0);
   int pause_icon = gfx_pause_icon;
-  if ((!screen && !n_dots && !n_hp && !n_lines && !n_bars && !pause_icon) || overlay_state == OV_FAILED)
+  if ((!screen && !n_dots && !n_hp && !n_lines && !n_faces && !n_bars && !pause_icon) || overlay_state == OV_FAILED)
     return;
   if (index < 0 || index >= swapchain_texture_count) {
     static bool warned;

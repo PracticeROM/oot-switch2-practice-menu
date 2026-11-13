@@ -23,7 +23,7 @@ SRC = ROOT / "src" / "ootgz"
 OUT = ROOT / "lang" / "template.json"
 
 LITERAL = re.compile(r'"((?:[^"\\\n]|\\.)*)"')  # a C string literal, with escapes
-SKIP_FILES = {"font.c", "lang.c"}
+SKIP_FILES = {"font.c", "lang.c", "flagnames.c"}  # flagnames.c: the game's field names
 SPEC = re.compile(r"%[-+ #0]*[0-9*]*(?:\.[0-9*]+)?(?:hh|h|ll|l|z)?[a-zA-Z%]")  # a printf conversion
 SKIP_LINE_STARTS = ("#include", "#pragma", "_Static_assert", "log_printf", "__asm__")  # not translated
 NOT_TEXT = "/* not menu text */"

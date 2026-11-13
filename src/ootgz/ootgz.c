@@ -26,6 +26,7 @@
 #include "menus.h"
 #include "airwall.h"
 #include "enemyhp.h"
+#include "flaglog.h"
 #include "overlayui.h"
 #include "divetest.h"
 #include "levitate.h"
@@ -359,6 +360,7 @@ static void frame(void)
   }
   frames_run++;
   sys_frame();
+  flaglog_frame(false); /* what the game changed since the last frame, before this module changes anything */
   input_update();
 
   fa_menu_was_open = menu_current != 0; /* an L that closes the menu isn't frame advance's */
@@ -387,6 +389,7 @@ static void frame(void)
   gameimage_frame(); /* the game's pictures (its controllers, its menus' parts), a little each frame */
   settings_frame(menu_current != 0);
   settings_log_frame();
+  flaglog_frame(true); /* what this frame's menu and cheats changed */
   fa_frame(); /* last: the frame's work is done before the game is held */
 }
 

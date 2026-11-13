@@ -20,6 +20,10 @@ typedef struct {
 /* game thread: the slots now; false where AutoSaveMgr can't be found (1.0.0, the title screen, loading) */
 bool savepos_slots(savepos_slot_t slots[SAVEPOS_SLOTS]);
 
+/* game thread: AutoSaveMgr's name for what Link is doing ("Move", "Wait", "EvtTalk", ...), FINDINGS §9.3;
+ * false (and "") where it can't be read */
+bool savepos_link_state(char *buf, int len);
+
 /* game thread: the markers as world lines, (from, to) and a colour (airwall.h AW_SLOT_*); how many */
 #define SAVEPOS_MAX_LINES 64
 int savepos_lines(float ends[][2][3], uint8_t colours[], int max);

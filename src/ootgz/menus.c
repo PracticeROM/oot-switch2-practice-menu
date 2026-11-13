@@ -8,6 +8,7 @@
 #include "gamedata.h"
 #include "airwall.h"
 #include "enemyhp.h"
+#include "flaglog.h"
 #include "memview.h"
 #include "osk.h"
 #include "build_info.h" /* made by the Makefile: BUILD_WHEN, BUILD_VERSION */
@@ -2879,6 +2880,63 @@ static void build_pause_research(void)
   menu_add_return(&m_pause_research);
 }
 
+/* debug > flag logging: saved flag changes to CSV files on the SD card, three kinds with a switch each (flaglog.h) */
+static menu_t m_flaglog;
+
+/* it->data: which switch */
+enum { FLAGLOG_FLAGS, FLAGLOG_STATUS, FLAGLOG_STORY };
+
+static bool *flaglog_switch(menu_item_t *it)
+{
+  return it->data == FLAGLOG_STATUS ? &flaglog_status_enabled
+       : it->data == FLAGLOG_STORY ? &flaglog_story_enabled : &flaglog_enabled;
+}
+
+static bool get_flaglog(menu_item_t *it)
+{
+  return *flaglog_switch(it);
+}
+
+static void set_flaglog(menu_item_t *it, bool on)
+{
+  *flaglog_switch(it) = on;
+}
+
+static void text_flaglog(menu_item_t *it, char *buf, int len)
+{
+  if (it->data == FLAGLOG_STATUS)
+    flaglog_status_text(buf, len);
+  else if (it->data == FLAGLOG_STORY)
+    flaglog_story_text(buf, len);
+  else
+    flaglog_file_text(buf, len);
+}
+
+static void build_flaglog(void)
+{
+  menu_init(&m_flaglog, "flag logging", 7);
+  menu_item_t *record = menu_add_check(&m_flaglog, "record flag changes", get_flaglog, set_flaglog, FLAGLOG_FLAGS);
+  if (record) {
+    record->hint = "named flag changes, added to the newest flaglog/flags-NNN.csv";
+    record->log_label = "flag logging:";
+  }
+  menu_item_t *status = menu_add_check(&m_flaglog, "record player status", get_flaglog, set_flaglog, FLAGLOG_STATUS);
+  if (status) {
+    status->hint = "health, magic, rupees, equipment, bottles to flaglog/PlayerStatusChanges.csv";
+    status->log_label = "player status log:";
+  }
+  menu_item_t *story = menu_add_check(&m_flaglog, "record story events", get_flaglog, set_flaglog, FLAGLOG_STORY);
+  if (story) {
+    story->hint = "quest stages the game changes, and why, to flaglog/StoryEvents.csv";
+    story->log_label = "story events log:";
+  }
+  menu_add_return(&m_flaglog);
+  menu_add_text(&m_flaglog, text_flaglog, FLAGLOG_FLAGS);
+  menu_add_text(&m_flaglog, text_flaglog, FLAGLOG_STATUS);
+  menu_add_text(&m_flaglog, text_flaglog, FLAGLOG_STORY);
+  m_flaglog.footer = 3;
+}
+
 static void act_dive_test(menu_item_t *it)
 {
   divetest_toggle((int)it->data);
@@ -2889,11 +2947,13 @@ static void act_dive_test(menu_item_t *it)
 static void build_debug(void)
 {
   build_pause_research();
-  menu_init(&m_debug, "debug", 5);
+  build_flaglog();
+  menu_init(&m_debug, "debug", 6);
   menu_add_submenu(&m_debug, "tests", &m_tests);
   menu_add_submenu(&m_debug, "heap", &m_heap);
   menu_add_submenu(&m_debug, "memory", &memview_menu);
   menu_add_submenu(&m_debug, "pause research", &m_pause_research);
+  menu_add_submenu(&m_debug, "flag logging", &m_flaglog);
   menu_add_return(&m_debug);
   memview_build(&m_watches);
 
@@ -2934,8 +2994,10 @@ static menu_t m_log;
 #define LOG_TYPE_SIZE 20
 #define LOG_TYPE_MAX_LEN 18 /* a ':' further in isn't after a type */
 
-/* the filter's choices: all, problems, then each type seen */
-enum { LOG_FILTER_ALL, LOG_FILTER_PROBLEMS, LOG_FILTER_FIRST_TYPE };
+/* the filter's choices: all, problems, event flags (the flag log's own list, flaglog_line), then each type seen */
+enum { LOG_FILTER_ALL, LOG_FILTER_PROBLEMS, LOG_FILTER_FLAGS, LOG_FILTER_FIRST_TYPE };
+/* the flag log's messages: under event flags, not a type of their own */
+#define FLAG_LOG_TYPE "event flag" /* not menu text */
 
 static char log_types[MAX_LOG_TYPES][LOG_TYPE_SIZE];
 static const char *log_type_names[MAX_LOG_TYPES + LOG_FILTER_FIRST_TYPE];
@@ -2976,6 +3038,8 @@ static void log_scan_types(void)
       continue;
     char type[LOG_TYPE_SIZE];
     log_type(message, type, sizeof(type));
+    if (strings_equal(type, FLAG_LOG_TYPE))
+      continue;
     int known = 0;
     while (known < n_log_types && !strings_equal(log_types[known], type))
       known++;
@@ -2984,6 +3048,7 @@ static void log_scan_types(void)
   }
   log_type_names[LOG_FILTER_ALL] = "all";
   log_type_names[LOG_FILTER_PROBLEMS] = "problems";
+  log_type_names[LOG_FILTER_FLAGS] = "event flags";
   for (int k = 0; k < n_log_types; k++)
     log_type_names[LOG_FILTER_FIRST_TYPE + k] = log_types[k];
 }
@@ -2994,6 +3059,8 @@ static bool log_matches(const char *message)
     return true;
   if (log_filter == LOG_FILTER_PROBLEMS)
     return log_problem(message);
+  if (log_filter == LOG_FILTER_FLAGS)
+    return true;
   char type[LOG_TYPE_SIZE];
   log_type(message, type, sizeof(type));
   int type_index = log_filter - LOG_FILTER_FIRST_TYPE;
@@ -3005,8 +3072,9 @@ static const char *log_nth(int n, int *count)
 {
   const char *found = 0;
   int matching = 0;
+  bool flags = log_filter == LOG_FILTER_FLAGS; /* the flag log's own list: every one matches */
   for (int i = 0; i < LOG_LINES; i++) {
-    const char *message = log_line(i);
+    const char *message = flags ? flaglog_line(i) : log_line(i);
     if (!message || !message[0] || !log_matches(message))
       continue;
     if (matching == n)
@@ -3039,6 +3107,8 @@ static int get_log_filter(menu_item_t *it)
     snprintf(what, sizeof(what), "%s", T("every message, newest first (all also in sd:/sloperinaGZ/log.txt)"));
   else if (log_filter == LOG_FILTER_PROBLEMS)
     snprintf(what, sizeof(what), "%s", T("anything that couldn't be done"));
+  else if (log_filter == LOG_FILTER_FLAGS)
+    snprintf(what, sizeof(what), "%s", T("flag changes recorded by flag logging (debug > flag logging), newest first"));
   else
     snprintf(what, sizeof(what), TF("messages about %s"), log_type_names[log_filter]);
   snprintf(hint, sizeof(hint), "%s\n  %s: %s", T("which messages:"), T(log_type_names[log_filter]), what);

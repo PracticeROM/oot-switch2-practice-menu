@@ -282,6 +282,51 @@ Unreadable memory shows as `??`; read-only memory can't be changed. **Editing me
 
 The game's own pause state, for development: values you can watch, change and log.
 
+#### 2.9.4 Flag logging
+
+Records changes to the game's saved progress flags while you play, to learn what each flag is for. Every named story
+flag, event flag, item flag, counter and quest stage kept in the save is compared with the frame before. Flags
+without a known name are left out, and so is `Player_Rot_For_Map` (which way Link faces, for the map screen). The
+files go to `sloperinaGZ/flaglog/` on the SD card. There are three, each with its own switch:
+
+| Switch | File | What |
+|---|---|---|
+| **record flag changes** | `flags-NNN.csv` | Every flag change except player status. The newest one (the highest number) is added to, across sessions and save loads, with a `start` row for each session; `flags-001.csv` is made when there's none. To start a fresh file, rename or delete the old ones. |
+| **record player status** | `PlayerStatusChanges.csv` | `PlayerStatus.*`: health, magic, rupees, what Link wears, bottles. One file, added to each time, with a `start` row for each session. |
+| **record story events** | `StoryEvents.csv` | The story menu's values (the quests' stages) when the game changes them, with what most likely caused it. Your own changes from the story menu aren't recorded here. One file, added to each time. |
+
+The switches are kept in the settings, so they stay on across starts. The lines under the menu show each file and
+how many rows this session has added. While **record flag changes** is on, **Event flag written to CSV** shows in the bottom right
+when a flag changes, at most once a second ("3 event flags written to CSV" when more changed in that time). Each
+change is also kept in the log menu: choose **event flags** as its filter (2.11).
+
+Each row has the date and time (the console's clock, e.g. `13/11/2026 15:47:02`), the seconds since this session's recording
+started, the frame, the map, Link's position, what Link was doing (`EvtTalk` while he talks; 1.1.1 only), the
+flag's type, hash and name, its old and new values, and who changed it: `game`, or `sloperinaGZ` for the menu and
+cheats. Other kinds of row:
+- **`area`:** Link entered a map. It gives the old and new map, and in the note the entrance, the arrival event
+  and the event starter.
+- **`String`:** a change to one of the game's named text fields, such as the map.
+- **`bulk`:** loading a save changes thousands of flags at once, which shows as this one row.
+- **`muted`:** a flag that keeps changing (a timer, or a value a cheat holds) is muted after 10 quick changes.
+
+`StoryEvents.csv` adds, after those columns:
+
+| Column | What |
+|---|---|
+| `cause` | In words, e.g. `talking: Npc_Kokiri_Mido_Child (Npc_Kokiri_Mido_Child_C1_N)`, `event: …`, `entering HyruleField_Adult -> LakeHylia_Adult - arrival event …`, `after the event …`, or `unknown`. |
+| `event`, `event_ago` | The last event that played (a `HavePlayedEvent` or `HaveTalked_Special` flag going on) and how many seconds before. |
+| `npc` | That event's NPC, when it's an NPC's and played in the last minute. |
+| `last_area`, `area_ago`, `entrance`, `arrival_event` | The last map Link entered, how long before, the entrance and the event it played on arrival. |
+| `message_target` | The name the game's messages are using at that moment (`UI_MessageTargetActorName`). |
+
+On a PC with the game's files, `python tools/flaglog.py <file>.csv` writes `<file>-named.csv` for any of the three.
+It adds a cause from the game's event scripts (`cause_from_scripts` in the story file, where the recorder's own
+`cause` is kept), such as `talking: Npc_Kokiri_Mido_Child` or `getting <item>`. For changes made by event scripts it
+also adds the script (`set_by`, e.g. `SageOfWater/IceCavern_WaterSerenade` for the Water Temple quest moving to
+`Step04`), the NPC and the dialogue just before the change. The scripts say who *can* set a flag, so when several
+can, the `match` column says how sure the pick is; see the tool's help.
+
 ### 2.10 Settings
 
 **menu settings**: **language** ([6](#6-languages)), **size** (auto, small 2x, medium 2.5x, large 3x: the menu, watches
@@ -351,7 +396,11 @@ Under **log history**: the last 128 messages sloperinaGZ wrote, newest first, fi
 
 | Item | What it does |
 |---|---|
-| **filter** `< all >` | Which messages: **all**, only **problems** (anything that couldn't be done), or one kind (warp, settings, notice... whatever kinds there are). |
+| **filter** `< all >` | Which messages: **all**, only **problems** (anything that couldn't be done), **event flags**, or one kind (warp, settings, notice... whatever kinds there are). |
+
+**event flags** shows the flag changes recorded by flag logging (2.9.4), each with the date and time, e.g.
+`13/11 15:47:02 HavePlayedEvent.Npc_Kokiri_Mido_Child_C1C2_TT 0 -> 1`. It keeps the last 128 flag changes in a list of
+their own, so other messages don't push them out. Flags without a known name show their hash.
 
 Everything is also written to **`sloperinaGZ/log.txt`** on the SD card (on an emulator, its virtual SD card;
 Lichii build 150+: `%APPDATA%\lichii\sdmc\sloperinaGZ\log.txt`; Fritchii v5.8+: `%APPDATA%\fritchii\sdmc\sloperinaGZ\log.txt`; Eden and older Lichii / Fritchii: `%APPDATA%\eden\sdmc\sloperinaGZ\log.txt`), with the time since the game started, about once a
@@ -397,7 +446,7 @@ game's pause screen closed):
 Settings are saved on the SD card in `sloperinaGZ/settings.ini` (on an emulator, its virtual SD card) a couple of
 seconds after you close the menu. It's plain `key=value` text: cheats, watches (which, in what order, their types,
 names and whether shown), the watches box, menu size, background, hiding in game menus, language, input display,
-levitate, frame advance and save position. Delete it to go back to the defaults. Your game saves are never touched.
+levitate, frame advance, save position and flag logging. Delete it to go back to the defaults. Your game saves are never touched.
 
 The game's pictures sloperinaGZ uses (the controllers in the input display, the menus' parts, the item icons)
 are kept in `sloperinaGZ/cache/` once they're made from your copy of the game, so later starts don't have to make

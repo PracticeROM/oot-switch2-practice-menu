@@ -101,6 +101,34 @@ static uintptr_t autosave_mgr(void)
   return cached_mgr;
 }
 
+/* FINDINGS §9.3 (a lead): AutoSaveMgr +0x1DC holds a short name for what Link is doing. Read as text in
+ * place; anything that doesn't look like a name (unprintable, unterminated) gives "". */
+#define LINK_STATE 0x1DC
+#define LINK_STATE_MAX 32
+
+bool savepos_link_state(char *buf, int len)
+{
+  buf[0] = 0;
+  uintptr_t mgr = autosave_mgr();
+  if (!mgr || len < 2 || !sys_mapped(mgr + LINK_STATE, LINK_STATE_MAX, SYS_PERM_R))
+    return false;
+  const volatile char *s = (const volatile char *)(mgr + LINK_STATE);
+  for (int i = 0; i < LINK_STATE_MAX; i++) {
+    char c = s[i];
+    if (!c) {
+      if (i == 0 || i >= len)
+        break;
+      for (int j = 0; j <= i; j++)
+        buf[j] = s[j];
+      return true;
+    }
+    if (c < 0x21 || c > 0x7E)
+      break;
+  }
+  buf[0] = 0;
+  return false;
+}
+
 bool savepos_slots(savepos_slot_t slots[SAVEPOS_SLOTS])
 {
   uintptr_t mgr = autosave_mgr();

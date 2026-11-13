@@ -6,6 +6,7 @@
  *   watch_list=<watch_t>:<display type>:<hidden>,...
  *   opacity=0..100             arrival_cutscenes=0|1      levitate=0|1      levitate_speed=<units/s>
  *   menu_style=0|1 (0: the game's type, 1: gz's pixel font)
+ *   flag_log=0|1, flag_log_player_status=0|1, flag_log_story=0|1 (the flag log's three files, flaglog.h)
  *   hide_in_game_menus=0|1 (no watches, input display or log while the game's pause screen or map is open)
  *   input_display_position=<gfx_corner_t>   input_display_x=, input_display_y= (custom: thousandths)
  *   settings_version=<n> (SETTINGS_VERSION when saved: what settings_load has updated the file for)
@@ -26,6 +27,7 @@
 #include "levitate.h"
 #include "airwall.h"
 #include "savepos.h"
+#include "flaglog.h"
 
 #include "sdfs.h"
 #include "lang.h"
@@ -105,6 +107,9 @@ typedef struct {
   int32_t enemy_hp_xray;
   int32_t menu_style;
   int32_t hide_in_game_menus;
+  int32_t flag_log;
+  int32_t flag_log_status;
+  int32_t flag_log_story;
 } snapshot_t;
 
 static bool mounted;
@@ -174,6 +179,9 @@ static snapshot_t take_snapshot(void)
   s.enemy_hp_xray = enemy_hp_xray;
   s.menu_style = gfx_style;
   s.hide_in_game_menus = hide_in_game_menus;
+  s.flag_log = flaglog_enabled;
+  s.flag_log_status = flaglog_status_enabled;
+  s.flag_log_story = flaglog_story_enabled;
   return s;
 }
 
@@ -254,6 +262,9 @@ static void apply_snapshot(const snapshot_t *s)
   savepos_load = s->savepos_load != 0;
   enemy_hp_shown = s->enemy_hp != 0;
   enemy_hp_xray = s->enemy_hp_xray != 0;
+  flaglog_enabled = s->flag_log != 0;
+  flaglog_status_enabled = s->flag_log_status != 0;
+  flaglog_story_enabled = s->flag_log_story != 0;
 }
 
 /* --- reading the file ------------------------------------------------------------------------- */
@@ -339,6 +350,9 @@ static const struct { const char *key; size_t field_offset; } int_keys[] = {
   INT_KEY("enemy_health_xray", enemy_hp_xray),
   INT_KEY("menu_style", menu_style),
   INT_KEY("hide_in_game_menus", hide_in_game_menus),
+  INT_KEY("flag_log", flag_log),
+  INT_KEY("flag_log_player_status", flag_log_status),
+  INT_KEY("flag_log_story", flag_log_story),
 };
 #define N_INT_KEYS (sizeof(int_keys) / sizeof(*int_keys))
 
@@ -537,11 +551,13 @@ static void save_settings_file(const snapshot_t *s)
                   "menu_size=%d\n"
                   "input_display=%d\ninput_display_background=%d\ninput_display_parts=%d\n"
                   "input_display_style=%d\ninput_display_size=%d\ninput_display_position=%d\n"
-                  "input_display_x=%d\ninput_display_y=%d\nmenu_style=%d\nhide_in_game_menus=%d\n",
+                  "input_display_x=%d\ninput_display_y=%d\nmenu_style=%d\nhide_in_game_menus=%d\nflag_log=%d\n"
+                  "flag_log_player_status=%d\nflag_log_story=%d\n",
                   s->lang, (int)s->frame_advance, (int)s->frame_advance_in_pause, (int)s->frame_advance_button, (int)s->pause_display,
                   (int)s->menu_scale, (int)s->input_display, (int)s->input_display_bg, (int)s->input_parts,
                   (int)s->input_style, (int)s->input_size, (int)s->input_position, (int)s->input_x,
-                  (int)s->input_y, (int)s->menu_style, (int)s->hide_in_game_menus);
+                  (int)s->input_y, (int)s->menu_style, (int)s->hide_in_game_menus, (int)s->flag_log,
+                  (int)s->flag_log_status, (int)s->flag_log_story);
   for (int w = 0; w < W_COUNT && n < (int)sizeof(buf); w++)
     if (s->watch_labels[w][0])
       n += snprintf(buf + n, sizeof(buf) - n, WATCH_LABEL_KEY "%d=%s\n", w, s->watch_labels[w]);

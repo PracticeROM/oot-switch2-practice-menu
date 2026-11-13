@@ -114,6 +114,17 @@ static gd_type_t *find_type_entry(gd_kind_t kind)
   return 0;
 }
 
+gd_type_t *gd_type(gd_kind_t kind)
+{
+  return kind < GD_NTYPES ? find_type_entry(kind) : 0;
+}
+
+void gd_layout(gd_kind_t kind, uint32_t *stride, uint32_t *value_off)
+{
+  *stride = kind < GD_NTYPES ? type_layouts[kind].stride : 0;
+  *value_off = kind < GD_NTYPES ? type_layouts[kind].value_off : 0;
+}
+
 /* The (hash, index) pair for `hash`, probing like GetInt does. */
 static uint32_t *gd_lookup(const gd_type_t *type, uint32_t hash)
 {
@@ -229,14 +240,34 @@ bool gd_set_enum(uint32_t hash, uint32_t value)
 
 /* --- String64 ---------------------------------------------------------------------------- */
 
-/* Follow the same hash table and value pointer as the game's GetString64. */
-static char *string_value(uint32_t hash)
+gd_type_t *gd_string_type(void)
 {
   uint8_t *mgr = gd_manager();
   if (!mgr)
     return 0;
-  const gd_type_t *t = (const gd_type_t *)(mgr + Z64HD_GD_STRING_TYPE);
-  if (!type_plausible(t))
+  gd_type_t *t = (gd_type_t *)(mgr + Z64HD_GD_STRING_TYPE);
+  return type_plausible(t) ? t : 0;
+}
+
+/* The text of the String64 object `index`, checked as the game's GetString64 leaves it. */
+static char *string_at(const gd_type_t *t, uint32_t index)
+{
+  if (index >= t->count)
+    return 0;
+  uintptr_t field = (uintptr_t)t->objects + (size_t)index * Z64HD_STR_STRIDE + Z64HD_STR_VALUE;
+  uintptr_t text = sys_ptr(field);
+  uint32_t capacity;
+  if (!text || !sys_read32(field + sizeof(uintptr_t), &capacity) || capacity < GD_STR_LEN ||
+      !sys_mapped(text, GD_STR_LEN, SYS_PERM_R | SYS_PERM_W))
+    return 0;
+  return (char *)text;
+}
+
+/* Follow the same hash table and value pointer as the game's GetString64. */
+static char *string_value(uint32_t hash)
+{
+  const gd_type_t *t = gd_string_type();
+  if (!t)
     return 0;
   uint32_t index = 0;
   if (hash) {
@@ -245,13 +276,13 @@ static char *string_value(uint32_t hash)
       return 0;
     index = e[1];
   }
-  uintptr_t field = (uintptr_t)t->objects + (size_t)index * Z64HD_STR_STRIDE + Z64HD_STR_VALUE;
-  uintptr_t text = sys_ptr(field);
-  uint32_t capacity;
-  if (!text || !sys_read32(field + sizeof(uintptr_t), &capacity) || capacity < GD_STR_LEN ||
-      !sys_mapped(text, GD_STR_LEN, SYS_PERM_R | SYS_PERM_W))
-    return 0;
-  return (char *)text;
+  return string_at(t, index);
+}
+
+const char *gd_str_index(uint32_t index)
+{
+  const gd_type_t *t = gd_string_type();
+  return t ? string_at(t, index) : 0;
 }
 
 const char *gd_get_str(uint32_t hash)

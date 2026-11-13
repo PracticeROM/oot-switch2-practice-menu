@@ -22,8 +22,16 @@ typedef struct {
 
 typedef enum { GD_INT, GD_BOOL, GD_FLOAT, GD_ENUM, GD_NTYPES } gd_kind_t;
 
+/* Every field object starts with the same header (FINDINGS §1, "Saved or not"). */
+#define GD_FIELD_RESET_BITS 0x08 /* u32; bit 0: cleared on an area change */
+#define GD_FIELD_SAVE_FILE  0x10 /* s32: -1 not saved, 0 the save slot, 1..3 other save files */
+
 void     *gd_manager(void);
 bool      gd_ready(void);           /* manager present and the Int fields look valid */
+/* The manager's entry for a type (its objects and hash table), or 0; and where values sit in its
+ * objects: object i is at objects + i * stride, its value at + value_off (a copy follows it). */
+gd_type_t *gd_type(gd_kind_t kind);
+void      gd_layout(gd_kind_t kind, uint32_t *stride, uint32_t *value_off);
 void      gd_reset(void);           /* forget cached type entries (call on save load) */
 
 /* Int: through the game's own GetInt/SetInt (SetInt is queued and applied at the flush). */
@@ -53,6 +61,10 @@ bool      gd_set_enum(uint32_t hash, uint32_t value);
 #define GD_STR_SPAWN    0x0B570AB2u
 #define GD_STR_LEN 64
 const char *gd_get_str(uint32_t hash); /* hash 0 returns the first string for the memory viewer */
+/* the String64 type entry (objects Z64HD_STR_STRIDE apart, with the common header), or 0; and the text of
+ * its object `index` (0 if unreadable) */
+gd_type_t  *gd_string_type(void);
+const char *gd_str_index(uint32_t index);
 bool        gd_set_str(uint32_t hash, const char *s);
 
 /* The game's own pause (its pause screen or an item menu): Sequence_IsPause, or a pause request

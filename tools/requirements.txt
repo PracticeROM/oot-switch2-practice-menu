@@ -1,5 +1,5 @@
 # Development tools only (tools/, docs/); nothing here is needed to build or play sloperinaGZ.
 # gendata.py, lang_template.py, docs/build.py: the standard library only.
-zstandard   # gamefiles.py, nupfs.py: reading the game's files from a dump
+zstandard   # gamefiles.py, nupfs.py, flaglog.py: reading the game's files from a dump
 numpy       # re64.py: static analysis of main
-evfl        # evdump.py: event flows
+evfl        # evdump.py, flaglog.py: event flows

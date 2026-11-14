@@ -96,6 +96,35 @@ typedef enum {
 #define GFX_PAD_DPAD_X 64
 #define GFX_PAD_DPAD_Y 56
 enum { GFX_CLICK_L3, GFX_CLICK_R3, GFX_CLICK_DPAD_UP, GFX_CLICK_DPAD_DOWN, GFX_CLICK_DPAD_LEFT, GFX_CLICK_DPAD_RIGHT };
+
+/* The minimal input display (gfx_input_minimal, gfx_panel_t.pad 2): a Pro Controller as one short line of
+ * outlines, each filled while held (as gz's GameCube one), over the stick readouts. In font pixels from the
+ * text's top-left, symmetric about x 76, in rows 0..2 (the readouts are row GFX_MINI_READOUT_ROW, the left at
+ * GFX_MINI_LREADOUT_COL, the right at GFX_MINI_RREADOUT_COL, in GFX_MINI_COLS cells): along the top, ZL beside
+ * L and ZR beside R as bars at the ends, - and + over the sticks; under those, left to right, the d-pad,
+ * the two sticks side by side in the middle, and the A/B/X/Y diamond. The buttons are rounded boxes (circles
+ * where square), from (x0, y0) to (x1, y1) inclusive, numbered as gfx_panel_t.buttons' bits. */
+#define GFX_MINI_READOUT_ROW 3
+#define GFX_MINI_COLS 19
+#define GFX_MINI_LREADOUT_COL 0
+#define GFX_MINI_RREADOUT_COL 10
+#define GFX_MINI_TRIM 3 /* font pixels off the bottom margin (with a background): close over the watches */
+#define GFX_MINI_LSTICK_X 62
+#define GFX_MINI_RSTICK_X 90
+#define GFX_MINI_STICK_Y 19
+#define GFX_MINI_STICK_R 10
+#define GFX_MINI_STICK_TRAVEL GFX_MINI_STICK_R /* full tilt: the dot's middle on the ring */
+#define GFX_MINI_STICK_DOT 3    /* the dot's radius */
+#define GFX_MINI_DPAD_X 16
+#define GFX_MINI_DPAD_Y 19
+#define GFX_MINI_DPAD_ARM 9     /* from the centre to an arm's end */
+#define GFX_MINI_DPAD_HALF 3    /* half an arm's width */
+enum {
+  GFX_HELD_ZL, GFX_HELD_L, GFX_HELD_R, GFX_HELD_ZR, GFX_HELD_MINUS, GFX_HELD_PLUS,
+  GFX_HELD_A, GFX_HELD_B, GFX_HELD_X, GFX_HELD_Y, GFX_HELD_COUNT
+};
+typedef struct { int16_t x0, y0, x1, y1; } gfx_mini_box_t;
+extern const gfx_mini_box_t gfx_mini_buttons[GFX_HELD_COUNT];
 typedef enum {
   GFX_TOP_LEFT, GFX_TOP_RIGHT, GFX_BOTTOM_LEFT, GFX_BOTTOM_RIGHT, GFX_TOP_CENTRE, GFX_BOTTOM_CENTRE,
   GFX_CUSTOM, /* at (x, y), thousandths of the picture: the panel's top-left corner */
@@ -111,7 +140,8 @@ typedef struct {
   uint8_t  alpha[GFX_ROWS];           /* the log: each row's text opacity, 0..255 */
   int16_t  x, y;                      /* GFX_CUSTOM: where, in thousandths of the picture */
   bool     clear;                     /* no background (the log; the input display unless it has one) */
-  uint8_t  pad;                       /* input display: 1 = the controller drawing (nvn.c pad_pixel) */
+  uint8_t  pad;                       /* input display: 1 = the controller drawing (nvn.c pad_pixel), 2 = minimal */
+  uint16_t buttons;                   /* ... minimal: the buttons held, bit GFX_HELD_* */
   int8_t   sticks[4];                 /* ... left x, y, right x, y, -100..100 */
   uint8_t  clicks;                    /* ... bit 0 L3, bit 1 R3, bits 2..5 d-pad up, down, left, right */
   uint8_t  device;                    /* ... the controller in use: GFX_PAD_PRO, _JOYCONS or _HANDHELD */
@@ -158,6 +188,8 @@ void gfx_input(int col, int row, gfx_style_t style, const char *s);
 /* the controller drawing, this frame, of the controller in use (the game's style draws its picture of it) */
 enum { GFX_PAD_PRO, GFX_PAD_JOYCONS, GFX_PAD_HANDHELD };
 void gfx_input_pad(const int8_t sticks[4], uint8_t clicks, int device);
+/* the minimal drawing instead (gfx_mini_buttons): `buttons` the GFX_HELD_* bits held */
+void gfx_input_minimal(const int8_t sticks[4], uint8_t clicks, uint16_t buttons);
 void gfx_input_background(bool on); /* the input display on a background, as the watches */
 void gfx_input_scale(int percent);  /* ... at this % of the menu's text size */
 void gfx_input_place(gfx_corner_t corner, int x_permille, int y_permille); /* ... where (x, y: GFX_CUSTOM) */

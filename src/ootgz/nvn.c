@@ -867,6 +867,74 @@ static uint8_t pad_pixel(const gfx_panel_t *panel, int x, int y)
   return 0;
 }
 
+/* The minimal drawing (gfx.h's GFX_MINI_ layout): every part an outline, filled while held. */
+static bool mini_box_inside(const gfx_mini_box_t *b, int x, int y)
+{
+  if (x < b->x0 || x > b->x1 || y < b->y0 || y > b->y1)
+    return false;
+  int w = b->x1 - b->x0, h = b->y1 - b->y0, r = (w < h ? w : h) / 2;
+  int cx = x < b->x0 + r ? b->x0 + r : x > b->x1 - r ? b->x1 - r : x;
+  int cy = y < b->y0 + r ? b->y0 + r : y > b->y1 - r ? b->y1 - r : y;
+  int dx = x - cx, dy = y - cy;
+  return dx * dx + dy * dy <= r * r + r; /* + r: rounder at these sizes */
+}
+
+static bool mini_dpad_inside(int dx, int dy)
+{
+  int ax = dx < 0 ? -dx : dx, ay = dy < 0 ? -dy : dy;
+  return (ax <= GFX_MINI_DPAD_HALF && ay <= GFX_MINI_DPAD_ARM) || (ay <= GFX_MINI_DPAD_HALF && ax <= GFX_MINI_DPAD_ARM);
+}
+
+#define MINI_LINE (PAL_TEXT + GFX_NORMAL) /* the outlines, and what's held */
+#define MINI_CLICKED (PAL_TEXT + GFX_FAINT)
+
+static uint8_t mini_pixel(const gfx_panel_t *panel, int x, int y)
+{
+  for (int k = 0; k < 2; k++) { /* the sticks' dots, where the sticks are: at full tilt over their rings */
+    int cx = k ? GFX_MINI_RSTICK_X : GFX_MINI_LSTICK_X;
+    int ex = x - (cx + panel->sticks[2 * k] * GFX_MINI_STICK_TRAVEL / 100);
+    int ey = y - (GFX_MINI_STICK_Y - panel->sticks[2 * k + 1] * GFX_MINI_STICK_TRAVEL / 100);
+    if (ex * ex + ey * ey <= GFX_MINI_STICK_DOT * GFX_MINI_STICK_DOT + 1)
+      return MINI_LINE;
+  }
+  if (y >= GFX_MINI_READOUT_ROW * CELL_H) /* the readouts' row */
+    return 0;
+  for (int k = 0; k < 2; k++) { /* the sticks' rings, filled faint while clicked in */
+    int cx = k ? GFX_MINI_RSTICK_X : GFX_MINI_LSTICK_X, cy = GFX_MINI_STICK_Y, r = GFX_MINI_STICK_R;
+    gfx_mini_box_t ring = { (int16_t)(cx - r), (int16_t)(cy - r), (int16_t)(cx + r), (int16_t)(cy + r) };
+    if (!mini_box_inside(&ring, x, y))
+      continue;
+    if (!mini_box_inside(&ring, x - 1, y) || !mini_box_inside(&ring, x + 1, y) || !mini_box_inside(&ring, x, y - 1) ||
+        !mini_box_inside(&ring, x, y + 1))
+      return MINI_LINE;
+    return panel->clicks >> (GFX_CLICK_L3 + k) & 1 ? MINI_CLICKED : 0;
+  }
+  int dx = x - GFX_MINI_DPAD_X, dy = y - GFX_MINI_DPAD_Y;
+  if (mini_dpad_inside(dx, dy)) { /* the d-pad: a cross, each arm filled while held */
+    if (!mini_dpad_inside(dx - 1, dy) || !mini_dpad_inside(dx + 1, dy) || !mini_dpad_inside(dx, dy - 1) ||
+        !mini_dpad_inside(dx, dy + 1))
+      return MINI_LINE;
+    int arm = dy < -GFX_MINI_DPAD_HALF  ? GFX_CLICK_DPAD_UP
+              : dy > GFX_MINI_DPAD_HALF ? GFX_CLICK_DPAD_DOWN
+              : dx < -GFX_MINI_DPAD_HALF ? GFX_CLICK_DPAD_LEFT
+              : dx > GFX_MINI_DPAD_HALF ? GFX_CLICK_DPAD_RIGHT
+                                        : -1;
+    return arm >= 0 && (panel->clicks >> arm & 1) ? MINI_LINE : 0;
+  }
+  for (int i = 0; i < GFX_HELD_COUNT; i++) { /* the buttons */
+    const gfx_mini_box_t *b = &gfx_mini_buttons[i];
+    if (!mini_box_inside(b, x, y))
+      continue;
+    if (panel->buttons >> i & 1)
+      return MINI_LINE;
+    if (!mini_box_inside(b, x - 1, y) || !mini_box_inside(b, x + 1, y) || !mini_box_inside(b, x, y - 1) ||
+        !mini_box_inside(b, x, y + 1))
+      return MINI_LINE;
+    return 0;
+  }
+  return 0;
+}
+
 /* whether character c of the font has a pixel at (glyph_x, glyph_y) */
 static inline bool font_pixel(unsigned char c, int glyph_x, int glyph_y)
 {
@@ -897,7 +965,7 @@ static inline uint8_t panel_pixel(const gfx_panel_t *panel, int x, int y, int sc
     unsigned char c = (unsigned char)panel->ch[row][col];
     bool glyph = glyph_y < FONT_H && font_pixel(c, glyph_x, glyph_y);
     if (!glyph && !is_sprite(c)) {
-      uint8_t k = pad_pixel(panel, font_x, font_y);
+      uint8_t k = panel->pad == 2 ? mini_pixel(panel, font_x, font_y) : pad_pixel(panel, font_x, font_y);
       if (k)
         return k;
     }
@@ -1512,6 +1580,8 @@ static bool panel_size(int p, const gfx_panel_t *panel, const frame_t *frame, bo
   int h = PANEL_H(rows, scale);
   if (gpu)
     nativeui_gpu_size(panel, rows, scale, &w, &h);
+  if (panel->pad == 2 && !panel->clear) /* the minimal input display: a slimmer bottom margin on its band */
+    h -= GFX_MINI_TRIM * scale / SC_ONE;
   *cols_out = cols, *rows_out = rows, *scale_out = scale, *w_out = w, *h_out = h;
   return true;
 }

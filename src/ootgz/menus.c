@@ -2368,7 +2368,7 @@ static void set_lang(menu_item_t *it, int choice)
 }
 
 /* input display */
-static const char *const input_style_names[] = { "row", "controller" };
+static const char *const input_style_names[] = { "row", "controller", "minimal" };
 static const char *const input_size_names[] = { "small", "medium", "large" };
 
 static bool get_input_display(menu_item_t *it)
@@ -2606,7 +2606,7 @@ static void build_input_display(void)
   menu_item_t *style = menu_add_option(&m_input_display, "style", ARRAY_LEN(input_style_names), input_style_names,
                                        get_input_style, set_input_style, 0);
   if (style) {
-    style->hint = "row: gz's line   controller: a Switch 2 Pro Controller, the sticks' values under it";
+    style->hint = "row: gz's line   controller: a Pro Controller   minimal: its outlines in one short line";
     style->log_label = "input display style";
   }
   menu_item_t *size = menu_add_option(&m_input_display, "size", ARRAY_LEN(input_size_names), input_size_names,

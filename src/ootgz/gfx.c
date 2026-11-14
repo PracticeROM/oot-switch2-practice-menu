@@ -291,6 +291,24 @@ void gfx_input_pad(const int8_t sticks[4], uint8_t clicks, int device)
   input_panel.device = (uint8_t)device;
 }
 
+/* gfx.h's layout of the minimal drawing */
+const gfx_mini_box_t gfx_mini_buttons[GFX_HELD_COUNT] = {
+  [GFX_HELD_ZL] = { 4, 0, 18, 4 },      [GFX_HELD_L] = { 22, 0, 36, 4 },
+  [GFX_HELD_R] = { 116, 0, 130, 4 },    [GFX_HELD_ZR] = { 134, 0, 148, 4 },
+  [GFX_HELD_MINUS] = { 62, 0, 68, 6 },  [GFX_HELD_PLUS] = { 84, 0, 90, 6 },
+  [GFX_HELD_A] = { 140, 16, 146, 22 },  [GFX_HELD_B] = { 133, 23, 139, 29 },
+  [GFX_HELD_X] = { 133, 9, 139, 15 },   [GFX_HELD_Y] = { 126, 16, 132, 22 },
+};
+
+void gfx_input_minimal(const int8_t sticks[4], uint8_t clicks, uint16_t buttons)
+{
+  input_panel.pad = 2;
+  memcpy(input_panel.sticks, sticks, 4);
+  input_panel.clicks = clicks;
+  input_panel.buttons = buttons;
+  input_panel.device = GFX_PAD_PRO;
+}
+
 void gfx_hud_at(int x_permille, int y_permille)
 {
   hud_panel.x = (int16_t)x_permille;
@@ -405,6 +423,7 @@ static void measure_panel(gfx_panel_t *panel)
   uint32_t hash = FNV_OFFSET_BASIS ^ panel->corner ^ (uint32_t)panel->clear << 8; /* the shadow depends on clear */
   hash = hash_mix(hash, (uint32_t)panel->pad << 9 ^ (uint32_t)panel->clicks << 10 ^ (uint32_t)panel->device << 24 ^
                           (uint32_t)(uint8_t)panel->yoff << 12 ^ (uint32_t)panel->scale_pct << 16);
+  hash = hash_mix(hash, panel->buttons);
   for (int i = 0; i < 4; i++) /* the sticks are drawn from these */
     hash = hash_mix(hash, (uint8_t)panel->sticks[i]);
   for (int r = 0; r < GFX_ROWS; r++)

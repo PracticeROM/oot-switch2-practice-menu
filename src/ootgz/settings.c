@@ -218,7 +218,7 @@ static void apply_snapshot(const snapshot_t *s)
 
   input_display = s->input_display != 0;
   input_display_bg = s->input_display_bg != 0;
-  input_style = s->input_style == 1;
+  input_style = s->input_style >= 0 && s->input_style <= 2 ? s->input_style : 0; /* row, controller, minimal */
   if (s->input_size >= 0 && s->input_size < INPUT_SIZE_COUNT)
     input_size = s->input_size;
   if (s->input_position >= 0 && s->input_position < GFX_NPLACES)

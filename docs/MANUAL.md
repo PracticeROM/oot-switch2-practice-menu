@@ -302,7 +302,7 @@ gz's input display, at the bottom left unless you move it (hidden while the menu
 | **show** | Turn it on. |
 | **background** | Put it on a background, like the watches. |
 | **left stick**, **right stick**, **buttons** | What it shows. |
-| **style** | **row**: gz's line of stick values and buttons. **controller**: a Switch 2 Pro Controller with the buttons lighting up, rings for the sticks and their values underneath. |
+| **style** | **row**: gz's line of stick values and buttons. **controller**: a Switch 2 Pro Controller with the buttons lighting up, rings for the sticks and their values underneath. **minimal**: a Pro Controller as one short line of outlines that fill while held. |
 | **size** | small, medium, large: half, three quarters or all of the menu's size. |
 | **position** | The corner it's in, or **custom** (where **move input display position** left it), as the watches box. |
 | **move input display position** | Move it anywhere: the D-pad glides it (hold to speed up), **L** leaves it there. It's shown while you move it, and so are the watches if they're on. |

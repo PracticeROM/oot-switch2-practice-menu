@@ -89,7 +89,7 @@ void watch_set_list(const watch_t *list, int n)
 
 /* --- settings -------------------------------------------------------------------------------- */
 
-enum { INPUT_STYLE_ROW, INPUT_STYLE_CONTROLLER }; /* input_style */
+enum { INPUT_STYLE_ROW, INPUT_STYLE_CONTROLLER, INPUT_STYLE_MINIMAL }; /* input_style */
 
 int watches_corner = GFX_BOTTOM_LEFT;
 int watches_x = 30, watches_y = 600;
@@ -148,21 +148,15 @@ static int8_t stick_percent(int32_t raw)
   return (int8_t)percent;
 }
 
-static void controller_frame(void)
+/* the sticks as -100..100 (a stick not shown: centred), and gfx_input_pad's `clicks` for what's held */
+static uint8_t pad_state(uint32_t held, int8_t sticks[4])
 {
   int32_t left_x, left_y, right_x, right_y;
   input_sticks(&left_x, &left_y, &right_x, &right_y);
-  uint32_t held = input_held();
-  int8_t sticks[4] = { stick_percent(left_x), stick_percent(left_y), stick_percent(right_x),
-                       stick_percent(right_y) };
-  if (!input_show_left) {
-    sticks[0] = 0;
-    sticks[1] = 0;
-  }
-  if (!input_show_right) {
-    sticks[2] = 0;
-    sticks[3] = 0;
-  }
+  sticks[0] = input_show_left ? stick_percent(left_x) : 0;
+  sticks[1] = input_show_left ? stick_percent(left_y) : 0;
+  sticks[2] = input_show_right ? stick_percent(right_x) : 0;
+  sticks[3] = input_show_right ? stick_percent(right_y) : 0;
   uint8_t clicks = 0;
   if (held & BTN_LSTICK)
     clicks |= PAD_LSTICK;
@@ -178,6 +172,28 @@ static void controller_frame(void)
     if (held & BTN_DRIGHT)
       clicks |= PAD_DRIGHT;
   }
+  return clicks;
+}
+
+/* the stick readouts ("L x y", "R x y") in a row, at these columns */
+static void stick_readouts(const int8_t sticks[4], int row, int left_col, int right_col)
+{
+  char readout[16];
+  if (input_show_left) {
+    snprintf(readout, sizeof(readout), "L%4d%4d", sticks[0], sticks[1]);
+    gfx_input(left_col, row, GFX_LOG, readout);
+  }
+  if (input_show_right) {
+    snprintf(readout, sizeof(readout), "R%4d%4d", sticks[2], sticks[3]);
+    gfx_input(right_col, row, GFX_LOG, readout);
+  }
+}
+
+static void controller_frame(void)
+{
+  uint32_t held = input_held();
+  int8_t sticks[4];
+  uint8_t clicks = pad_state(held, sticks);
   static const uint8_t devices[] = { [INPUT_PRO] = GFX_PAD_PRO, [INPUT_JOYCONS] = GFX_PAD_JOYCONS,
                                      [INPUT_HANDHELD] = GFX_PAD_HANDHELD };
   int controller = input_controller();
@@ -188,19 +204,34 @@ static void controller_frame(void)
       gfx_input(pad_buttons[i].col, pad_buttons[i].row, style, pad_buttons[i].name);
     }
   }
-  /* the readouts under it */
-  char readout[16];
-  if (input_show_left) {
-    snprintf(readout, sizeof(readout), "L%4d%4d", sticks[0], sticks[1]);
-    gfx_input(PAD_LEFT_READOUT_COL, PAD_READOUT_ROW, GFX_LOG, readout);
-  }
-  if (input_show_right) {
-    snprintf(readout, sizeof(readout), "R%4d%4d", sticks[2], sticks[3]);
-    gfx_input(PAD_RIGHT_READOUT_COL, PAD_READOUT_ROW, GFX_LOG, readout);
-  }
-  /* fillers in opposite corners: the panel keeps its size */
+  /* fillers in opposite corners: the panel keeps its size (first: the right readout ends in the last column) */
   gfx_input(0, 0, GFX_NORMAL, filler);
   gfx_input(PAD_LAST_COL, PAD_READOUT_ROW, GFX_NORMAL, filler);
+  stick_readouts(sticks, PAD_READOUT_ROW, PAD_LEFT_READOUT_COL, PAD_RIGHT_READOUT_COL); /* under it */
+}
+
+/* The minimal style: a generic Pro Controller as one short line of outlines. */
+static const struct { uint32_t bit; uint8_t held; } mini_buttons[] = {
+  { BTN_ZL, GFX_HELD_ZL }, { BTN_L, GFX_HELD_L }, { BTN_R, GFX_HELD_R }, { BTN_ZR, GFX_HELD_ZR },
+  { BTN_MINUS, GFX_HELD_MINUS }, { BTN_PLUS, GFX_HELD_PLUS }, { BTN_A, GFX_HELD_A }, { BTN_B, GFX_HELD_B },
+  { BTN_X, GFX_HELD_X }, { BTN_Y, GFX_HELD_Y },
+};
+
+static void minimal_frame(void)
+{
+  uint32_t held = input_held();
+  int8_t sticks[4];
+  uint8_t clicks = pad_state(held, sticks);
+  uint16_t buttons = 0;
+  if (input_show_buttons)
+    for (unsigned i = 0; i < sizeof(mini_buttons) / sizeof(*mini_buttons); i++)
+      if (held & mini_buttons[i].bit)
+        buttons |= (uint16_t)(1u << mini_buttons[i].held);
+  gfx_input_minimal(sticks, clicks, buttons);
+  /* fillers first, the readouts over them (the right one's last digit is in the last column) */
+  gfx_input(0, 0, GFX_NORMAL, filler);
+  gfx_input(GFX_MINI_COLS - 1, GFX_MINI_READOUT_ROW, GFX_NORMAL, filler);
+  stick_readouts(sticks, GFX_MINI_READOUT_ROW, GFX_MINI_LREADOUT_COL, GFX_MINI_RREADOUT_COL);
 }
 
 /* gz's input display: the sticks (-100..100) in gz's grey, then every button in a slot of its own
@@ -251,6 +282,8 @@ static void input_display_frame(bool menu_open, bool shown)
   gfx_input_scale(size_percent[input_size >= 0 && input_size < 3 ? input_size : 0]);
   if (input_style == INPUT_STYLE_CONTROLLER)
     controller_frame();
+  else if (input_style == INPUT_STYLE_MINIMAL)
+    minimal_frame();
   else
     input_row_frame();
 }

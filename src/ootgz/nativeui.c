@@ -1934,7 +1934,7 @@ bool nativeui_gpu_size(const gfx_panel_t *panel, int rows, int scale, int *w, in
   fp_px = (float)scale / NUI_SC_ONE;
   band_ext_t e = band_of(panel);
   if (!laid_out(panel) || panel->pad) { /* gz's rows: the grid's size, and the band round it */
-    float picture = panel->pad ? pad_picture_width(panel, rows, scale) : 0;
+    float picture = panel->pad == 1 ? pad_picture_width(panel, rows, scale) : 0; /* not the minimal one's */
     if (picture > 0) /* the input display on the game's picture of its controller: as wide as that */
       *w = (int)(picture + 0.999f);
     *w += (int)((e.l + e.r) * fp_px + 0.999f);
@@ -2418,6 +2418,141 @@ static void draw_pad(const gfx_panel_t *panel, float x, float y, float w, int co
   draw_row(panel, row, cols, scale, legacy);
 }
 
+/* --- the minimal input display ------------------------------------------------------------------------
+ * gfx.h's GFX_MINI_ layout as smooth shapes: each part an outline, filled while held, on the stick
+ * readouts' row. A shape's id carries what makes its image (its kind, filled or not, its line's width in
+ * whole pixels), so gpuui_shape's (id, w, h) keeps one image for each. */
+enum { MINI_BOX, MINI_CROSS };
+#define SHAPE_MINI 0x400 /* + kind << 5 | filled << 4 | line (1..15) */
+#define MINI_LINE_FP 1.1f /* the outlines' width, font pixels */
+
+/* a w x h rounded box's signed distance (negative inside), its corners' radius half its shorter side */
+static float mini_box_distance(float px, float py, float w, float h)
+{
+  float r = (w < h ? w : h) / 2;
+  float qx = __builtin_fabsf(px - w / 2) - (w / 2 - r), qy = __builtin_fabsf(py - h / 2) - (h / 2 - r);
+  float ox = qx > 0 ? qx : 0, oy = qy > 0 ? qy : 0, in = qx > qy ? qx : qy;
+  return root(ox * ox + oy * oy) + (in < 0 ? in : 0) - r;
+}
+
+/* arg: the shape's id (its kind, filled, line) */
+static void paint_minimal(uint8_t *cov, int w, int h, int stride, const void *arg)
+{
+  uint32_t id = *(const uint32_t *)arg - SHAPE_MINI;
+  int kind = (int)(id >> 5);
+  bool filled = id >> 4 & 1;
+  float line = (float)(id & 15);
+  /* the cross's arms: as wide as gz's (GFX_MINI_DPAD_HALF of GFX_MINI_DPAD_ARM) */
+  float arm_w = w * (2 * GFX_MINI_DPAD_HALF + 1.0f) / (2 * GFX_MINI_DPAD_ARM + 1.0f);
+  for (int y = 0; y < h; y++) {
+    for (int x = 0; x < w; x++) {
+      float px = x + 0.5f, py = y + 0.5f, d;
+      if (kind == MINI_CROSS) { /* the union of its two bars, squared off */
+        float across = __builtin_fabsf(px - w / 2.0f) - arm_w / 2, down = __builtin_fabsf(py - h / 2.0f) - arm_w / 2;
+        float along_x = __builtin_fabsf(px - w / 2.0f) - w / 2.0f, along_y = __builtin_fabsf(py - h / 2.0f) - h / 2.0f;
+        float bar_v = across > along_y ? across : along_y, bar_h = down > along_x ? down : along_x;
+        d = bar_v < bar_h ? bar_v : bar_h;
+      } else {
+        d = mini_box_distance(px, py, (float)w, (float)h);
+      }
+      cov[y * stride + x] = coverage_of(filled ? 0.5f - d : line / 2 + 0.5f - __builtin_fabsf(d + line / 2));
+    }
+  }
+}
+
+/* a part at (x0, y0)..(x1, y1) inclusive, font pixels from the text's top-left at (ox, oy) */
+static void mini_shape(int kind, bool filled, float ox, float oy, float x0, float y0, float x1, float y1,
+                       gpu_colour_t colour, bool shadow)
+{
+  int line = (int)(MINI_LINE_FP * fp_px + 0.5f);
+  line = line < 1 ? 1 : line > 15 ? 15 : line;
+  int w = (int)((x1 - x0 + 1) * fp_px + 0.5f), h = (int)((y1 - y0 + 1) * fp_px + 0.5f);
+  if (w < 2 || h < 2)
+    return;
+  static uint32_t ids[2][2][16]; /* paint_minimal's arg: the id, kept (the atlas may paint it later) */
+  uint32_t *id = &ids[kind][filled][line];
+  *id = SHAPE_MINI + ((uint32_t)kind << 5 | (uint32_t)filled << 4 | (uint32_t)line);
+  float sx = ox + x0 * fp_px, sy = oy + y0 * fp_px;
+  if (shadow) { /* on the game with no band: a shadow, as the glyphs' */
+    float off = fp_px > 1 ? fp_px * 0.6f : 1;
+    gpuui_shape(*id, w, h, paint_minimal, id, sx + off, sy + off, (gpu_colour_t){ 0, 0, 0, 0.5f * colour.a });
+  }
+  gpuui_shape(*id, w, h, paint_minimal, id, sx, sy, colour);
+}
+
+static void draw_minimal(const gfx_panel_t *panel, float x, float y, float w, int cols, int rows, int scale,
+                         nui_legacy_fn legacy)
+{
+  /* the text's top-left: the drawing centred in its band, which can be wider than it (the size's smaller than
+   * the watches' it shares a band with) */
+  int grid_cols = cols < GFX_MINI_COLS ? cols : GFX_MINI_COLS;
+  float content = grid_cols * CELL_W * fp_px;
+  float ox = x + (w - content) / 2, oy = y + (TEXT_TOP_FP + panel->yoff) * fp_px;
+  if (ox < x + cell_x(0, scale))
+    ox = x + cell_x(0, scale);
+  gpu_colour_t line = to_gpu(styles[GFX_NORMAL].colour, 0.9f), lit = to_gpu(styles[GFX_NORMAL].colour, 1);
+  bool shadow = panel->clear;
+  for (int i = 0; i < GFX_HELD_COUNT; i++) { /* the buttons */
+    const gfx_mini_box_t *b = &gfx_mini_buttons[i];
+    bool held = panel->buttons >> i & 1;
+    mini_shape(MINI_BOX, held, ox, oy, b->x0, b->y0, b->x1, b->y1, held ? lit : line, shadow);
+  }
+  /* the d-pad: its cross, and each arm held filled */
+  const int dx = GFX_MINI_DPAD_X, dy = GFX_MINI_DPAD_Y, arm = GFX_MINI_DPAD_ARM;
+  mini_shape(MINI_CROSS, false, ox, oy, dx - arm, dy - arm, dx + arm, dy + arm, line, shadow);
+  static const int8_t arms[4][4] = { /* up, down, left, right (gfx.h's clicks order): x0, y0, x1, y1 from the middle */
+    { -GFX_MINI_DPAD_HALF, -GFX_MINI_DPAD_ARM, GFX_MINI_DPAD_HALF, -1 },
+    { -GFX_MINI_DPAD_HALF, 1, GFX_MINI_DPAD_HALF, GFX_MINI_DPAD_ARM },
+    { -GFX_MINI_DPAD_ARM, -GFX_MINI_DPAD_HALF, -1, GFX_MINI_DPAD_HALF },
+    { 1, -GFX_MINI_DPAD_HALF, GFX_MINI_DPAD_ARM, GFX_MINI_DPAD_HALF },
+  };
+  for (int a = 0; a < 4; a++)
+    if (panel->clicks >> (GFX_CLICK_DPAD_UP + a) & 1)
+      mini_shape(MINI_BOX, true, ox, oy, dx + arms[a][0], dy + arms[a][1], dx + arms[a][2], dy + arms[a][3], lit,
+                 false);
+  /* the sticks: a ring, filled faint while clicked in, and a dot where the stick is */
+  for (int k = 0; k < 2; k++) {
+    float cx = k ? GFX_MINI_RSTICK_X : GFX_MINI_LSTICK_X, cy = GFX_MINI_STICK_Y, r = GFX_MINI_STICK_R;
+    if (panel->clicks >> (GFX_CLICK_L3 + k) & 1)
+      mini_shape(MINI_BOX, true, ox, oy, cx - r, cy - r, cx + r, cy + r, to_gpu(styles[GFX_NORMAL].colour, 0.3f), false);
+    mini_shape(MINI_BOX, false, ox, oy, cx - r, cy - r, cx + r, cy + r, line, shadow);
+    float sx = cx + panel->sticks[2 * k] * GFX_MINI_STICK_TRAVEL / 100.0f;
+    float sy = cy - panel->sticks[2 * k + 1] * GFX_MINI_STICK_TRAVEL / 100.0f;
+    const float dot = GFX_MINI_STICK_DOT;
+    mini_shape(MINI_BOX, true, ox, oy, sx - dot, sy - dot, sx + dot, sy + dot, lit, shadow);
+  }
+  /* the readouts, under it: each a label and its two values, each value right-aligned in a slot as wide as
+   * "-100", the left readout against the grid's left edge and the right one against its right edge, so
+   * nothing moves as the values change. A stick's readout is shown when watches.c wrote it */
+  (void)legacy;
+  int row = GFX_MINI_READOUT_ROW < rows ? GFX_MINI_READOUT_ROW : rows - 1;
+  float top = (TEXT_TOP_FP + panel->yoff + row * CELL_HT) * fp_px;
+  int em = gamefont_em_for_height(GF_REGULAR, (int)(CELL_HT * TEXT_FILL * fp_px + 0.5f));
+  int base = (int)(top + CELL_HT * fp_px * 0.5f) + gamefont_ascent(GF_REGULAR, em) / 2;
+  float slot = gamefont_measure(GF_REGULAR, em, "-100", 4) / 64.0f, gap = em * 0.45f;
+  float label_w = gamefont_measure(GF_REGULAR, em, "R", 1) / 64.0f;
+  float lw = gamefont_measure(GF_REGULAR, em, "L", 1) / 64.0f;
+  label_w = lw > label_w ? lw : label_w;
+  float total = label_w + 2 * (gap + slot);
+  float grid_right = ox + content;
+  static const int at_col[2] = { GFX_MINI_LREADOUT_COL, GFX_MINI_RREADOUT_COL };
+  rgb_t colour = styles[GFX_LOG].colour;
+  gpu_x = x, gpu_y = y; /* draw_run's pen is from (gpu_x, gpu_y): `base` is already from y */
+  for (int s = 0; s < 2; s++) {
+    if (panel->ch[row][at_col[s]] != (s ? 'R' : 'L'))
+      continue;
+    float left = s ? grid_right - total : ox;
+    draw_run(s ? "R" : "L", 1, GF_REGULAR, em, (int)((left - gpu_x) * 64), base, colour);
+    for (int v = 0; v < 2; v++) {
+      char text[8];
+      int n = snprintf(text, sizeof(text), "%d", panel->sticks[2 * s + v]);
+      float right = left + label_w + (v + 1) * (gap + slot);
+      float tw = gamefont_measure(GF_REGULAR, em, text, n) / 64.0f;
+      draw_run(text, n, GF_REGULAR, em, (int)((right - tw - gpu_x) * 64), base, colour);
+    }
+  }
+}
+
 /* The game's scroll bar at bx over rows [row, row + rows) (row_top: each row's top, from y): its track (a shade
  * lighter than the box) over the rows, its thumb for the `rows` of `items` shown from `top` in the menu's gold,
  * the picture's grain kept as darker and lighter gold */
@@ -2674,6 +2809,11 @@ bool nativeui_gpu_panel(const gfx_panel_t *panel, int x, int y, int w, int h, in
     return true;
   gpu = true;
   strip_w = w;
+  if (panel->pad == 2) {
+    draw_minimal(panel, (float)x, (float)y, (float)w, cols, rows, scale, legacy);
+    gpu = false;
+    return true;
+  }
   if (panel->pad) {
     draw_pad(panel, (float)x, (float)y, (float)w, cols, rows, scale, legacy);
     gpu = false;

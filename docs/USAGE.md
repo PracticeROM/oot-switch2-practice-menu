@@ -119,7 +119,7 @@ to play slowly, and press **L + L3** to carry on. Buttons and stick directions y
 the next frame.
 
 **...see my inputs on screen?**
-**settings > input display > show**. Choose **style: controller** for a picture of a Pro Controller.
+**settings > input display > show**. Choose **style: controller** for a picture of a Pro Controller, or **style: minimal** for a short line of button outlines that takes less of the screen.
 
 **...make the menu smaller?**
 **settings > size**: small, medium or large.

@@ -66,7 +66,7 @@ extern int input_x, input_y;       /* ... GFX_CUSTOM: top-left, thousandths of t
 extern bool input_moving;          /* ... shown while the menu is open, to move it */
 extern bool input_display_bg;      /* ... on a background, as the watches */
 extern bool input_show_left, input_show_right, input_show_buttons; /* what it shows */
-extern int input_style;            /* 0 a row (gz's), 1 a controller (Switch 2 Pro Controller) */
+extern int input_style;            /* 0 a row (gz's), 1 a controller (Switch 2 Pro Controller), 2 minimal */
 extern int input_size;             /* 0 small, 1 medium, 2 large: 50, 75, 100% of the menu's size */
 extern const char *const watches_corner_names[];
 
